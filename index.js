@@ -692,19 +692,6 @@ function getDashboardPage() {
     .setup-list { margin-top: 22px; display: grid; gap: 12px; }
     .setup-item { display: flex; align-items: center; gap: 12px; font-size: 14px; color: #475569; }
     .setup-item span { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 8px; background: #e2e8f0; color: #0f172a; font-weight: 700; }
-    @media (max-width: 980px) {
-      .hero, .card-grid, .cta-grid, .stat-grid { grid-template-columns: 1fr; }
-      .hero { display: block; }
-      .cta-grid { display: grid; }
-      .stat-grid { display: grid; }
-    }
-  </style>
-    .notice strong { color: #92400e; }
-    .notice a { align-self: start; display: inline-flex; padding: 12px 20px; border-radius: 12px; background: #d97706; color: white; text-decoration: none; font-weight: 700; }
-    .small-text { color: #64748b; font-size: 14px; }
-    .setup-list { margin-top: 22px; display: grid; gap: 12px; }
-    .setup-item { display: flex; align-items: center; gap: 12px; font-size: 14px; color: #475569; }
-    .setup-item span { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 8px; background: #e2e8f0; color: #0f172a; font-weight: 700; }
     .card-grid { display: grid; gap: 24px; grid-template-columns: 1.4fr 1fr; margin-bottom: 32px; }
     .panel { background: white; border-radius: 24px; padding: 28px; box-shadow: 0 24px 60px rgba(15,23,42,0.08); border: 1px solid rgba(148,163,184,0.14); }
     .panel h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
