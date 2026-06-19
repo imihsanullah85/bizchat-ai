@@ -763,12 +763,12 @@ function getDashboardPage() {
         ];
         const completed = configItems.filter(item => item.value).length;
         const progressValue = Math.round((completed / configItems.length) * 100);
-        document.getElementById('setupScore').textContent = `${progressValue}%`;
-        document.getElementById('setupScoreLabel').textContent = `${progressValue}% complete`;
-        document.getElementById('progressFill').style.width = `${progressValue}%`;
+        document.getElementById('setupScore').textContent = \`\${progressValue}%\`;
+        document.getElementById('setupScoreLabel').textContent = \`\${progressValue}% complete\`;
+        document.getElementById('progressFill').style.width = \`\${progressValue}%\`;
 
         configItems.forEach((item, index) => {
-          const span = document.getElementById(`item${index + 1}`);
+          const span = document.getElementById(\`item\${index + 1}\`);
           if (item.value) {
             span.textContent = '✓';
             span.style.background = '#d1fae5';
