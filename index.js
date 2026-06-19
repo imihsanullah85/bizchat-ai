@@ -420,34 +420,40 @@ function getLoginPage() {
   <title>BizChat AI - Login</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .container { background: white; padding: 48px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); width: 100%; max-width: 400px; }
-    h1 { font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
-    p.subtitle { color: #64748b; margin-bottom: 32px; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at top left, #0f172a 0%, #1e293b 35%, #020617 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #f8fafc; }
+    body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(circle at 20% 20%, rgba(59,130,246,0.18), transparent 28%), radial-gradient(circle at 80% 10%, rgba(14,165,233,0.1), transparent 20%), radial-gradient(circle at 50% 90%, rgba(99,102,241,0.12), transparent 25%); pointer-events: none; }
+    .container { position: relative; width: min(100%, 420px); background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148,163,184,0.2); border-radius: 32px; padding: 40px 36px; backdrop-filter: blur(24px); box-shadow: 0 40px 90px rgba(15,23,42,0.42); }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 12px; color: #38bdf8; margin-bottom: 20px; }
+    .brand::before { content: '•'; color: #60a5fa; }
+    h1 { font-size: 34px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; }
+    p.subtitle { color: #cbd5e1; line-height: 1.7; margin-bottom: 32px; }
     .form-group { margin-bottom: 20px; }
-    label { display: block; font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 6px; }
-    input { width: 100%; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 16px; transition: border-color 0.2s; }
-    input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-    button { width: 100%; padding: 14px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #2563eb; }
-    .footer { margin-top: 24px; text-align: center; color: #64748b; font-size: 14px; }
-    .footer a { color: #3b82f6; text-decoration: none; }
-    .error { background: #fef2f2; color: #dc2626; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: none; }
+    label { display: block; margin-bottom: 8px; font-size: 14px; color: #e2e8f0; }
+    input { width: 100%; border: 1px solid rgba(148,163,184,0.25); border-radius: 14px; padding: 14px 16px; background: rgba(255,255,255,0.05); color: #f8fafc; font-size: 15px; transition: border-color 0.2s, transform 0.2s; }
+    input::placeholder { color: #94a3b8; }
+    input:focus { outline: none; border-color: #38bdf8; transform: translateY(-1px); box-shadow: 0 0 0 4px rgba(56,189,248,0.12); }
+    button { width: 100%; padding: 16px; border-radius: 14px; border: none; background: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
+    button:hover { transform: translateY(-1px); opacity: 0.96; }
+    .footer { margin-top: 26px; text-align: center; color: #94a3b8; font-size: 14px; }
+    .footer a { color: #38bdf8; text-decoration: none; font-weight: 600; }
+    .footer a:hover { text-decoration: underline; }
+    .error { background: rgba(248,113,113,0.12); color: #fecaca; border: 1px solid rgba(248,113,113,0.3); padding: 14px 16px; border-radius: 14px; margin-bottom: 22px; display: none; }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="brand">BizChat AI</div>
     <h1>Welcome Back</h1>
-    <p class="subtitle">Sign in to your BizChat AI dashboard</p>
+    <p class="subtitle">Sign in and access your AI-powered WhatsApp commerce dashboard instantly.</p>
     <div id="error" class="error"></div>
     <form id="loginForm">
       <div class="form-group">
         <label for="email">Email</label>
-        <input type="email" id="email" required placeholder="your@email.com">
+        <input type="email" id="email" required placeholder="hello@business.com">
       </div>
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" required placeholder="Enter your password">
+        <input type="password" id="password" required placeholder="Your secure password">
       </div>
       <button type="submit">Sign In</button>
     </form>
@@ -457,6 +463,7 @@ function getLoginPage() {
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const error = document.getElementById('error');
+      error.style.display = 'none';
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
 
@@ -470,7 +477,7 @@ function getLoginPage() {
         if (data.success) {
           window.location = '/dashboard';
         } else {
-          error.textContent = data.error;
+          error.textContent = data.error || 'Invalid email or password.';
           error.style.display = 'block';
         }
       } catch (err) {
@@ -492,25 +499,31 @@ function getRegisterPage() {
   <title>BizChat AI - Register</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .container { background: white; padding: 48px; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); width: 100%; max-width: 400px; }
-    h1 { font-size: 28px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
-    p.subtitle { color: #64748b; margin-bottom: 32px; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at top left, #0f172a 0%, #1e293b 35%, #020617 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #f8fafc; padding: 24px; }
+    body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(circle at 20% 15%, rgba(16,185,129,0.16), transparent 24%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.14), transparent 18%); pointer-events: none; }
+    .container { position: relative; width: min(100%, 460px); background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148,163,184,0.18); border-radius: 32px; padding: 42px 38px; backdrop-filter: blur(24px); box-shadow: 0 40px 90px rgba(15,23,42,0.42); }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 12px; color: #34d399; margin-bottom: 20px; }
+    .brand::before { content: '•'; color: #60a5fa; }
+    h1 { font-size: 34px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; }
+    p.subtitle { color: #cbd5e1; line-height: 1.7; margin-bottom: 32px; }
     .form-group { margin-bottom: 20px; }
-    label { display: block; font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 6px; }
-    input { width: 100%; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 16px; transition: border-color 0.2s; }
-    input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-    button { width: 100%; padding: 14px; background: #3b82f6; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #2563eb; }
-    .footer { margin-top: 24px; text-align: center; color: #64748b; font-size: 14px; }
-    .footer a { color: #3b82f6; text-decoration: none; }
-    .error { background: #fef2f2; color: #dc2626; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: none; }
+    label { display: block; margin-bottom: 8px; font-size: 14px; color: #e2e8f0; }
+    input { width: 100%; border: 1px solid rgba(148,163,184,0.24); border-radius: 14px; padding: 14px 16px; background: rgba(255,255,255,0.05); color: #f8fafc; font-size: 15px; transition: border-color 0.2s, transform 0.2s; }
+    input::placeholder { color: #94a3b8; }
+    input:focus { outline: none; border-color: #34d399; transform: translateY(-1px); box-shadow: 0 0 0 4px rgba(52,211,153,0.14); }
+    button { width: 100%; padding: 16px; border-radius: 14px; border: none; background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
+    button:hover { transform: translateY(-1px); opacity: 0.96; }
+    .footer { margin-top: 26px; text-align: center; color: #94a3b8; font-size: 14px; }
+    .footer a { color: #38bdf8; text-decoration: none; font-weight: 600; }
+    .footer a:hover { text-decoration: underline; }
+    .error { background: rgba(248,113,113,0.12); color: #fecaca; border: 1px solid rgba(248,113,113,0.3); padding: 14px 16px; border-radius: 14px; margin-bottom: 22px; display: none; }
   </style>
 </head>
 <body>
   <div class="container">
+    <div class="brand">BizChat AI</div>
     <h1>Create Account</h1>
-    <p class="subtitle">Start your WhatsApp AI assistant today</p>
+    <p class="subtitle">Build your WhatsApp AI assistant and start converting conversations into sales.</p>
     <div id="error" class="error"></div>
     <form id="registerForm">
       <div class="form-group">
@@ -519,7 +532,7 @@ function getRegisterPage() {
       </div>
       <div class="form-group">
         <label for="email">Email</label>
-        <input type="email" id="email" required placeholder="your@email.com">
+        <input type="email" id="email" required placeholder="hello@business.com">
       </div>
       <div class="form-group">
         <label for="password">Password</label>
@@ -533,6 +546,7 @@ function getRegisterPage() {
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const error = document.getElementById('error');
+      error.style.display = 'none';
       const shop_name = document.getElementById('shop_name').value;
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
@@ -547,7 +561,7 @@ function getRegisterPage() {
         if (data.success) {
           window.location = '/settings';
         } else {
-          error.textContent = data.error;
+          error.textContent = data.error || 'Registration failed.';
           error.style.display = 'block';
         }
       } catch (err) {
@@ -569,66 +583,167 @@ function getDashboardPage() {
   <title>BizChat AI - Dashboard</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; min-height: 100vh; }
-    .header { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); color: white; padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 24px; font-weight: 700; }
-    .nav { display: flex; gap: 24px; align-items: center; }
-    .nav a { color: rgba(255,255,255,0.8); text-decoration: none; font-size: 14px; transition: color 0.2s; }
-    .nav a:hover { color: white; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 40px; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #0f172a; min-height: 100vh; }
+    .header { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); color: white; padding: 24px 36px; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }
+    .nav { display: flex; gap: 18px; flex-wrap: wrap; }
+    .nav a { color: rgba(255,255,255,0.86); text-decoration: none; font-size: 14px; transition: color 0.2s; }
+    .nav a:hover { color: #ffffff; }
+    .container { max-width: 1240px; margin: 0 auto; padding: 32px 28px 48px; }
+    .hero { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; margin-bottom: 32px; }
+    .hero-card { background: white; border-radius: 24px; padding: 28px; box-shadow: 0 20px 60px rgba(15,23,42,0.08); border: 1px solid rgba(148,163,184,0.12); }
+    .hero-title { font-size: 24px; font-weight: 700; margin-bottom: 10px; }
+    .hero-copy { color: #475569; line-height: 1.7; margin-bottom: 24px; }
+    .status-badges { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+    .badge { padding: 10px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; letter-spacing: 0.01em; }
+    .badge.online { background: #d1fae5; color: #065f46; }
+    .badge.pending { background: #fef9c3; color: #78350f; }
+    .badge.complete { background: #cffafe; color: #0c4a6e; }
+    .cta-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
+    .action-card { background: #0f172a; color: white; border-radius: 18px; padding: 20px; box-shadow: 0 20px 60px rgba(15,23,42,0.14); transition: transform 0.2s; text-decoration: none; }
+    .action-card:hover { transform: translateY(-2px); }
+    .action-card h3 { font-size: 16px; margin-bottom: 10px; }
+    .action-card p { color: rgba(255,255,255,0.72); font-size: 14px; line-height: 1.7; }
     .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px; margin-bottom: 40px; }
     .stat-card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
     .stat-card h3 { font-size: 14px; color: #64748b; margin-bottom: 8px; }
     .stat-card .value { font-size: 32px; font-weight: 700; color: #1e293b; }
-    .stat-card.success .value { color: #10b981; }
-    .payment-notice { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 12px; padding: 20px; margin-bottom: 40px; }
-    .payment-notice h3 { color: #92400e; margin-bottom: 8px; }
-    .payment-notice p { color: #a16207; margin-bottom: 12px; }
-    .payment-notice a { display: inline-block; background: #f59e0b; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; }
-    .section-title { font-size: 20px; font-weight: 600; color: #1e293b; margin-bottom: 20px; }
-    .conversations { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
-    .conv-item { padding: 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 0.2s; }
-    .conv-item:hover { background: #f8fafc; }
-    .conv-item:last-child { border-bottom: none; }
-    .conv-phone { font-weight: 600; color: #1e293b; }
+    .card-grid { display: grid; gap: 24px; grid-template-columns: 1.4fr 1fr; margin-bottom: 32px; }
+    .panel { background: white; border-radius: 24px; padding: 28px; box-shadow: 0 24px 60px rgba(15,23,42,0.08); border: 1px solid rgba(148,163,184,0.14); }
+    .panel h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .stat-card { border-radius: 20px; padding: 22px; background: #f8fafc; border: 1px solid rgba(148,163,184,0.18); }
+    .stat-card strong { display: block; font-size: 32px; margin-top: 12px; color: #0f172a; }
+    .stat-card span { font-size: 14px; color: #64748b; }
+    .progress { margin-top: 20px; }
+    .progress-bar { height: 12px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #22c55e); width: 0%; transition: width 0.4s ease; }
+    .conversation-list { display: grid; gap: 12px; }
+    .conv-item { background: #f8fafc; border-radius: 18px; padding: 18px 20px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; cursor: pointer; transition: transform 0.2s, background 0.2s; }
+    .conv-item:hover { transform: translateY(-1px); background: #ffffff; }
+    .conv-icon { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: #e0f2fe; color: #0c4a6e; font-weight: 700; }
+    .conv-meta { display: grid; gap: 6px; }
+    .conv-phone { font-weight: 700; color: #0f172a; }
     .conv-name { font-size: 14px; color: #64748b; }
-    .conv-last { font-size: 14px; color: #64748b; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conv-last { color: #475569; font-size: 14px; line-height: 1.5; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .conv-time { font-size: 12px; color: #94a3b8; }
-    .empty { text-align: center; padding: 60px; color: #64748b; }
+    .notice { background: #fef3c7; border: 1px solid #fde68a; padding: 18px 22px; border-radius: 18px; display: grid; gap: 14px; margin-bottom: 24px; }
+    .notice strong { color: #92400e; }
+    .notice a { align-self: start; display: inline-flex; padding: 12px 20px; border-radius: 12px; background: #d97706; color: white; text-decoration: none; font-weight: 700; }
+    .small-text { color: #64748b; font-size: 14px; }
+    .setup-list { margin-top: 22px; display: grid; gap: 12px; }
+    .setup-item { display: flex; align-items: center; gap: 12px; font-size: 14px; color: #475569; }
+    .setup-item span { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 8px; background: #e2e8f0; color: #0f172a; font-weight: 700; }
+    @media (max-width: 980px) {
+      .hero, .card-grid, .cta-grid, .stat-grid { grid-template-columns: 1fr; }
+      .hero { display: block; }
+      .cta-grid { display: grid; }
+      .stat-grid { display: grid; }
+    }
+  </style>
+    .notice strong { color: #92400e; }
+    .notice a { align-self: start; display: inline-flex; padding: 12px 20px; border-radius: 12px; background: #d97706; color: white; text-decoration: none; font-weight: 700; }
+    .small-text { color: #64748b; font-size: 14px; }
+    .setup-list { margin-top: 22px; display: grid; gap: 12px; }
+    .setup-item { display: flex; align-items: center; gap: 12px; font-size: 14px; color: #475569; }
+    .setup-item span { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 8px; background: #e2e8f0; color: #0f172a; font-weight: 700; }
+    .card-grid { display: grid; gap: 24px; grid-template-columns: 1.4fr 1fr; margin-bottom: 32px; }
+    .panel { background: white; border-radius: 24px; padding: 28px; box-shadow: 0 24px 60px rgba(15,23,42,0.08); border: 1px solid rgba(148,163,184,0.14); }
+    .panel h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .stat-card { border-radius: 20px; padding: 22px; background: #f8fafc; border: 1px solid rgba(148,163,184,0.18); }
+    .stat-card strong { display: block; font-size: 32px; margin-top: 12px; color: #0f172a; }
+    .stat-card span { font-size: 14px; color: #64748b; }
+    .progress { margin-top: 20px; }
+    .progress-bar { height: 12px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #22c55e); width: 0%; transition: width 0.4s ease; }
+    .conversation-list { display: grid; gap: 12px; }
+    .conv-item { background: #f8fafc; border-radius: 18px; padding: 18px 20px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; cursor: pointer; transition: transform 0.2s, background 0.2s; }
+    .conv-item:hover { transform: translateY(-1px); background: #ffffff; }
+    .conv-icon { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: #e0f2fe; color: #0c4a6e; font-weight: 700; }
+    .conv-meta { display: grid; gap: 6px; }
+    .conv-phone { font-weight: 700; color: #0f172a; }
+    .conv-name { font-size: 14px; color: #64748b; }
+    .conv-last { color: #475569; font-size: 14px; line-height: 1.5; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .conv-time { font-size: 12px; color: #94a3b8; }
+    @media (max-width: 980px) {
+      .header, .hero, .card-grid, .cta-grid, .stat-grid { grid-template-columns: 1fr; }
+      .hero { display: block; }
+      .cta-grid { display: grid; }
+      .stat-grid { display: grid; }
+    }
   </style>
 </head>
 <body>
   <header class="header">
-    <h1>BizChat AI</h1>
+    <div class="brand">BizChat AI</div>
     <nav class="nav">
       <a href="/dashboard">Dashboard</a>
       <a href="/settings">Settings</a>
       <a href="#" onclick="logout()">Logout</a>
     </nav>
   </header>
-  <div class="container">
-    <div id="paymentNotice" class="payment-notice" style="display: none;">
-      <h3>Subscription Payment Required</h3>
-      <p>PKR <span id="monthlyFee"></span>/month - Click below to pay and activate your AI assistant</p>
-      <a id="paymentLink" href="#">Pay Now</a>
+  <main class="container">
+    <section class="hero-card hero">
+      <div>
+        <p class="badge online">AI Assistant Live</p>
+        <h1 class="hero-title">Powerful WhatsApp automation for your business</h1>
+        <p class="hero-copy">Manage conversations, monitor performance, and complete setup from one polished dashboard.</p>
+        <div class="status-badges">
+          <span class="badge complete">Smart replies</span>
+          <span class="badge complete">WhatsApp integration</span>
+          <span class="badge pending">Payment setup</span>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card"><span>Total conversations</span><strong id="convCount">0</strong></div>
+        <div class="stat-card"><span>Messages this month</span><strong id="msgCount">0</strong></div>
+        <div class="stat-card"><span>Business score</span><strong id="setupScore">0%</strong></div>
+      </div>
+    </section>
+
+    <section class="cta-grid">
+      <a href="/settings" class="action-card">
+        <h3>Complete your setup</h3>
+        <p>Update business details, WhatsApp credentials and payment info to unlock full AI support.</p>
+      </a>
+      <a href="/dashboard" class="action-card">
+        <h3>Review conversations</h3>
+        <p>Open your most recent conversations and see customer requests in real time.</p>
+      </a>
+      <a href="/settings" class="action-card">
+        <h3>Manage billing</h3>
+        <p>Connect your payment gateway and activate assistant payments with one click.</p>
+      </a>
+    </section>
+
+    <div id="paymentNotice" class="notice" style="display: none;">
+      <strong>Payment setup required</strong>
+      <p>To fully activate your AI assistant, add a payment link in Settings.</p>
+      <a id="paymentLink" href="#">Go to Settings</a>
+      <p class="small-text">Your monthly fee is PKR <span id="monthlyFee"></span>. Once configured, customers can pay instantly.</p>
     </div>
 
-    <div class="stats">
-      <div class="stat-card">
-        <h3>Total Conversations</h3>
-        <div class="value" id="convCount">0</div>
-      </div>
-      <div class="stat-card success">
-        <h3>Messages This Month</h3>
-        <div class="value" id="msgCount">0</div>
-      </div>
+    <div class="card-grid">
+      <section class="panel">
+        <h2>Setup progress</h2>
+        <p class="small-text">A quick look at your business readiness score and key setup steps.</p>
+        <div class="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div></div>
+        <div style="margin-top: 14px;"><strong id="setupScoreLabel">0% complete</strong></div>
+        <div class="setup-list">
+          <div class="setup-item"><span id="item1">✕</span> Business info</div>
+          <div class="setup-item"><span id="item2">✕</span> WhatsApp config</div>
+          <div class="setup-item"><span id="item3">✕</span> Payment link</div>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Recent conversations</h2>
+        <div class="conversation-list" id="convList">
+          <div class="conv-item"><div class="conv-meta"><div class="conv-phone">Loading...</div></div></div>
+        </div>
+      </section>
     </div>
-
-    <h2 class="section-title">Recent Conversations</h2>
-    <div class="conversations" id="convList">
-      <div class="empty">Loading...</div>
-    </div>
-  </div>
+  </main>
   <script>
     async function loadDashboard() {
       try {
@@ -638,16 +753,38 @@ function getDashboardPage() {
           return;
         }
 
-        if (!me.payment_link || me.payment_link === '') {
-          document.getElementById('paymentNotice').style.display = 'block';
-          document.getElementById('monthlyFee').textContent = me.monthly_fee?.toLocaleString() || '5,000';
-          if (me.payment_link) {
-            document.getElementById('paymentLink').href = me.payment_link;
-          }
-        }
-
         const convs = await fetch('/api/conversations').then(r => r.json());
         document.getElementById('convCount').textContent = convs.length;
+
+        const configItems = [
+          { label: 'Business info', value: me.shop_name },
+          { label: 'WhatsApp config', value: me.whatsapp_phone_id && me.whatsapp_number },
+          { label: 'Payment link', value: me.payment_link }
+        ];
+        const completed = configItems.filter(item => item.value).length;
+        const progressValue = Math.round((completed / configItems.length) * 100);
+        document.getElementById('setupScore').textContent = `${progressValue}%`;
+        document.getElementById('setupScoreLabel').textContent = `${progressValue}% complete`;
+        document.getElementById('progressFill').style.width = `${progressValue}%`;
+
+        configItems.forEach((item, index) => {
+          const span = document.getElementById(`item${index + 1}`);
+          if (item.value) {
+            span.textContent = '✓';
+            span.style.background = '#d1fae5';
+            span.style.color = '#166534';
+          } else {
+            span.textContent = '✕';
+            span.style.background = '#f8fafc';
+            span.style.color = '#475569';
+          }
+        });
+
+        if (!me.payment_link) {
+          document.getElementById('paymentNotice').style.display = 'grid';
+          document.getElementById('paymentLink').href = '/settings';
+          document.getElementById('monthlyFee').textContent = (me.monthly_fee || 5000).toLocaleString();
+        }
 
         const list = document.getElementById('convList');
         if (convs.length === 0) {
@@ -667,9 +804,7 @@ function getDashboardPage() {
           \`).join('');
         }
 
-        const allMsgs = await Promise.all(convs.map(c =>
-          fetch('/api/conversations/' + c.id + '/messages').then(r => r.json())
-        ));
+        const allMsgs = await Promise.all(convs.map(c => fetch('/api/conversations/' + c.id + '/messages').then(r => r.json())));
         const total = allMsgs.reduce((sum, m) => sum + (m.messages?.length || 0), 0);
         document.getElementById('msgCount').textContent = total;
       } catch (err) {
