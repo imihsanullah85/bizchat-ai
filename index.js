@@ -1,5 +1,5 @@
 const express = require('express');
-const Database = require('better-sqlite3');
+const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -7,6 +7,140 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DATA_FILE = path.join(__dirname, 'bizchat-data.json');
+
+function loadData() {
+  try {
+    const raw = fs.readFileSync(DATA_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed.nextIds) {
+      parsed.nextIds = { business: 1, conversation: 1, message: 1 };
+    }
+    parsed.businesses = parsed.businesses || [];
+    parsed.conversations = parsed.conversations || [];
+    parsed.messages = parsed.messages || [];
+    return parsed;
+  } catch (error) {
+    return {
+      nextIds: { business: 1, conversation: 1, message: 1 },
+      businesses: [],
+      conversations: [],
+      messages: []
+    };
+  }
+}
+
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+  return data;
+}
+
+function getBusinessByWhatsAppPhoneId(phoneId) {
+  const data = loadData();
+  return data.businesses.find(b => b.whatsapp_phone_id === phoneId);
+}
+
+function getBusinessByEmail(email) {
+  const data = loadData();
+  return data.businesses.find(b => b.email === email);
+}
+
+function getBusinessById(id) {
+  const data = loadData();
+  return data.businesses.find(b => b.id === id);
+}
+
+function insertBusiness(email, passwordHash, shopName) {
+  const data = loadData();
+  const business = {
+    id: data.nextIds.business++,
+    email,
+    password_hash: passwordHash,
+    shop_name: shopName || 'My Shop',
+    description: '',
+    services: '',
+    prices: '',
+    timings: '',
+    faqs: '',
+    whatsapp_number: '',
+    whatsapp_phone_id: '',
+    payment_link: '',
+    monthly_fee: 5000,
+    created_at: new Date().toISOString()
+  };
+  data.businesses.push(business);
+  saveData(data);
+  return business;
+}
+
+function updateBusiness(id, updates) {
+  const data = loadData();
+  const business = data.businesses.find(b => b.id === id);
+  if (!business) return null;
+  Object.assign(business, updates);
+  saveData(data);
+  return business;
+}
+
+function ensureConversation(businessId, customerPhone, customerName) {
+  const data = loadData();
+  let conversation = data.conversations.find(c => c.business_id === businessId && c.customer_phone === customerPhone);
+  if (!conversation) {
+    conversation = {
+      id: data.nextIds.conversation++,
+      business_id: businessId,
+      customer_phone: customerPhone,
+      customer_name: customerName || '',
+      created_at: new Date().toISOString()
+    };
+    data.conversations.push(conversation);
+    saveData(data);
+  }
+  return conversation;
+}
+
+function insertMessage(conversationId, direction, content) {
+  const data = loadData();
+  const message = {
+    id: data.nextIds.message++,
+    conversation_id: conversationId,
+    direction,
+    content,
+    timestamp: new Date().toISOString()
+  };
+  data.messages.push(message);
+  saveData(data);
+  return message;
+}
+
+function getConversationsForBusiness(businessId) {
+  const data = loadData();
+  return data.conversations
+    .filter(c => c.business_id === businessId)
+    .map(c => {
+      const messages = data.messages.filter(m => m.conversation_id === c.id).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      const lastMessage = messages.length ? messages[messages.length - 1] : null;
+      return {
+        ...c,
+        message_count: messages.length,
+        last_message: lastMessage ? lastMessage.content : null,
+        last_message_time: lastMessage ? lastMessage.timestamp : null
+      };
+    })
+    .sort((a, b) => new Date(b.last_message_time || 0) - new Date(a.last_message_time || 0));
+}
+
+function getConversationByIdAndBusiness(id, businessId) {
+  const data = loadData();
+  return data.conversations.find(c => c.id === Number(id) && c.business_id === businessId);
+}
+
+function getMessagesForConversation(conversationId) {
+  const data = loadData();
+  return data.messages
+    .filter(m => m.conversation_id === Number(conversationId))
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
 
 // Middleware
 app.use(express.json());
@@ -17,49 +151,6 @@ app.use(session({
   saveUninitialized: false,
   cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
-
-// Database setup
-const db = new Database('bizchat.db');
-db.pragma('journal_mode = WAL');
-
-// Create tables
-db.exec(`
-  CREATE TABLE IF NOT EXISTS businesses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    shop_name TEXT DEFAULT '',
-    description TEXT DEFAULT '',
-    services TEXT DEFAULT '',
-    prices TEXT DEFAULT '',
-    timings TEXT DEFAULT '',
-    faqs TEXT DEFAULT '',
-    whatsapp_number TEXT DEFAULT '',
-    whatsapp_phone_id TEXT DEFAULT '',
-    payment_link TEXT DEFAULT '',
-    monthly_fee INTEGER DEFAULT 5000,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS conversations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    business_id INTEGER NOT NULL,
-    customer_phone TEXT NOT NULL,
-    customer_name TEXT DEFAULT '',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (business_id) REFERENCES businesses(id),
-    UNIQUE(business_id, customer_phone)
-  );
-
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    conversation_id INTEGER NOT NULL,
-    direction TEXT NOT NULL CHECK(direction IN ('in', 'out')),
-    content TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (conversation_id) REFERENCES conversations(id)
-  );
-`);
 
 // Gemini AI setup
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -127,9 +218,7 @@ async function handleWhatsAppMessage(msg, value) {
   if (!messageText) return;
 
   // Find business by WhatsApp phone ID
-  const business = db.prepare(
-    'SELECT * FROM businesses WHERE whatsapp_phone_id = ?'
-  ).get(businessPhoneId);
+  const business = getBusinessByWhatsAppPhoneId(businessPhoneId);
 
   if (!business) {
     console.log('No business found for phone ID:', businessPhoneId);
@@ -137,29 +226,16 @@ async function handleWhatsAppMessage(msg, value) {
   }
 
   // Create or get conversation
-  let conversation = db.prepare(
-    'SELECT * FROM conversations WHERE business_id = ? AND customer_phone = ?'
-  ).get(business.id, customerPhone);
-
-  if (!conversation) {
-    const result = db.prepare(
-      'INSERT INTO conversations (business_id, customer_phone, customer_name) VALUES (?, ?, ?)'
-    ).run(business.id, customerPhone, customerName);
-    conversation = { id: result.lastInsertRowid };
-  }
+  const conversation = ensureConversation(business.id, customerPhone, customerName);
 
   // Store incoming message
-  db.prepare(
-    'INSERT INTO messages (conversation_id, direction, content) VALUES (?, ?, ?)'
-  ).run(conversation.id, 'in', messageText);
+  insertMessage(conversation.id, 'in', messageText);
 
   // Generate AI response
   const aiResponse = await generateAIResponse(business, messageText);
 
   // Store outgoing message
-  db.prepare(
-    'INSERT INTO messages (conversation_id, direction, content) VALUES (?, ?, ?)'
-  ).run(conversation.id, 'out', aiResponse);
+  insertMessage(conversation.id, 'out', aiResponse);
 
   // Send response to WhatsApp
   await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, aiResponse);
@@ -243,18 +319,16 @@ app.post('/api/auth/register', async (req, res) => {
   }
 
   try {
-    const existing = db.prepare('SELECT id FROM businesses WHERE email = ?').get(email);
+    const existing = getBusinessByEmail(email);
     if (existing) {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const result = db.prepare(
-      'INSERT INTO businesses (email, password_hash, shop_name) VALUES (?, ?, ?)'
-    ).run(email, passwordHash, shop_name || 'My Shop');
+    const business = insertBusiness(email, passwordHash, shop_name || 'My Shop');
 
-    req.session.businessId = result.lastInsertRowid;
-    res.json({ success: true, businessId: result.lastInsertRowid });
+    req.session.businessId = business.id;
+    res.json({ success: true, businessId: business.id });
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ error: 'Registration failed' });
@@ -269,7 +343,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const business = db.prepare('SELECT * FROM businesses WHERE email = ?').get(email);
+    const business = getBusinessByEmail(email);
 
     if (!business) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -295,10 +369,7 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  const business = db.prepare(
-    'SELECT id, email, shop_name, description, services, prices, timings, faqs, whatsapp_number, whatsapp_phone_id, payment_link, monthly_fee FROM businesses WHERE id = ?'
-  ).get(req.session.businessId);
-
+  const business = getBusinessById(req.session.businessId);
   res.json(business);
 });
 
@@ -313,16 +384,17 @@ app.put('/api/business', requireAuth, (req, res) => {
   } = req.body;
 
   try {
-    db.prepare(`
-      UPDATE businesses SET
-        shop_name = ?, description = ?, services = ?, prices = ?,
-        timings = ?, faqs = ?, whatsapp_number = ?, whatsapp_phone_id = ?, payment_link = ?
-      WHERE id = ?
-    `).run(
-      shop_name || '', description || '', services || '', prices || '',
-      timings || '', faqs || '', whatsapp_number || '', whatsapp_phone_id || '',
-      payment_link || '', req.session.businessId
-    );
+    updateBusiness(req.session.businessId, {
+      shop_name: shop_name || '',
+      description: description || '',
+      services: services || '',
+      prices: prices || '',
+      timings: timings || '',
+      faqs: faqs || '',
+      whatsapp_number: whatsapp_number || '',
+      whatsapp_phone_id: whatsapp_phone_id || '',
+      payment_link: payment_link || ''
+    });
 
     res.json({ success: true });
   } catch (error) {
@@ -336,32 +408,18 @@ app.put('/api/business', requireAuth, (req, res) => {
 // ============================================
 
 app.get('/api/conversations', requireAuth, (req, res) => {
-  const conversations = db.prepare(`
-    SELECT c.*, COUNT(m.id) as message_count,
-      (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message,
-      (SELECT timestamp FROM messages WHERE conversation_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_time
-    FROM conversations c
-    LEFT JOIN messages m ON c.id = m.conversation_id
-    WHERE c.business_id = ?
-    GROUP BY c.id
-    ORDER BY last_message_time DESC
-  `).all(req.session.businessId);
-
+  const conversations = getConversationsForBusiness(req.session.businessId);
   res.json(conversations);
 });
 
 app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
-  const conversation = db.prepare(
-    'SELECT * FROM conversations WHERE id = ? AND business_id = ?'
-  ).get(req.params.id, req.session.businessId);
+  const conversation = getConversationByIdAndBusiness(req.params.id, req.session.businessId);
 
   if (!conversation) {
     return res.status(404).json({ error: 'Conversation not found' });
   }
 
-  const messages = db.prepare(`
-    SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp ASC
-  `).all(req.params.id);
+  const messages = getMessagesForConversation(req.params.id);
 
   res.json({ conversation, messages });
 });
