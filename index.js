@@ -241,15 +241,18 @@ async function handleWhatsAppMessage(msg, value) {
 }
 
 async function generateAIResponse(business, customerMessage) {
-  const systemPrompt = `You are a helpful AI assistant for "${business.shop_name}", a business in Pakistan.
+  const businessRecord = getBusinessById(business.id) || business;
+  console.log('AI prompt business data:', businessRecord);
+
+  const systemPrompt = `You are a helpful AI assistant for "${businessRecord.shop_name || 'the business'}", a business in Pakistan.
 
 BUSINESS INFORMATION:
-- Shop Name: ${business.shop_name}
-- Description: ${business.description}
-- Services: ${business.services}
-- Prices: ${business.prices}
-- Working Hours: ${business.timings}
-- FAQs: ${business.faqs}
+- Shop Name: ${businessRecord.shop_name || 'N/A'}
+- Description: ${businessRecord.description || 'N/A'}
+- Services: ${businessRecord.services || 'N/A'}
+- Prices: ${businessRecord.prices || 'N/A'}
+- Working Hours: ${businessRecord.timings || 'N/A'}
+- FAQs: ${businessRecord.faqs || 'N/A'}
 
 INSTRUCTIONS:
 - Respond in a friendly, helpful manner
@@ -398,8 +401,14 @@ app.put('/api/business', requireAuth, (req, res) => {
     faqs, whatsapp_number, whatsapp_phone_id, payment_link
   } = req.body;
 
+  const incoming = {
+    shop_name, description, services, prices, timings,
+    faqs, whatsapp_number, whatsapp_phone_id, payment_link
+  };
+  console.log('PUT /api/business incoming data:', incoming);
+
   try {
-    updateBusiness(req.session.businessId, {
+    const updatedBusiness = updateBusiness(req.session.businessId, {
       shop_name: shop_name || '',
       description: description || '',
       services: services || '',
@@ -411,10 +420,16 @@ app.put('/api/business', requireAuth, (req, res) => {
       payment_link: payment_link || ''
     });
 
-    res.json({ success: true });
+    if (!updatedBusiness) {
+      console.error('Update failed: business not found for id', req.session.businessId);
+      return res.status(404).json({ success: false, error: 'Business not found' });
+    }
+
+    console.log('Updated business record:', updatedBusiness);
+    res.json({ success: true, business: updatedBusiness });
   } catch (error) {
     console.error('Update error:', error);
-    res.status(500).json({ error: 'Update failed' });
+    res.status(500).json({ success: false, error: 'Update failed' });
   }
 });
 
@@ -908,7 +923,10 @@ function getSettingsPage() {
     input:focus, textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
     button { background: #3b82f6; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
     button:hover { background: #2563eb; }
-    .success { background: #ecfdf5; color: #059669; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: none; }
+    .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 999; min-width: 320px; max-width: calc(100% - 32px); padding: 16px 20px; border-radius: 14px; display: none; align-items: center; justify-content: space-between; font-weight: 600; box-shadow: 0 20px 60px rgba(15,23,42,0.18); transition: opacity 0.2s ease, transform 0.2s ease; }
+    .toast.show { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.success { background: #16a34a; color: white; }
+    .toast.error { background: #dc2626; color: white; }
     .help { font-size: 12px; color: #94a3b8; margin-top: 4px; }
   </style>
 </head>
@@ -921,9 +939,8 @@ function getSettingsPage() {
       <a href="#" onclick="logout()">Logout</a>
     </nav>
   </header>
+  <div id="toast" class="toast"></div>
   <div class="container">
-    <div id="success" class="success">Settings saved successfully!</div>
-
     <div class="card">
       <h2>Business Information</h2>
       <p style="color: #64748b; margin-bottom: 24px;">This information will be used by the AI to answer customer questions.</p>
@@ -1008,6 +1025,16 @@ function getSettingsPage() {
       }
     }
 
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = message;
+      toast.className = 'toast show ' + type;
+      setTimeout(() => {
+        toast.className = 'toast';
+      }, 3000);
+    }
+
     async function saveSettings(formData) {
       try {
         const res = await fetch('/api/business', {
@@ -1017,11 +1044,16 @@ function getSettingsPage() {
         });
         const data = await res.json();
         if (data.success) {
-          document.getElementById('success').style.display = 'block';
-          setTimeout(() => document.getElementById('success').style.display = 'none', 3000);
+          showToast('Business info saved successfully', 'success');
+          return true;
         }
+
+        showToast(data.error || 'Unable to save business information', 'error');
+        return false;
       } catch (err) {
         console.error(err);
+        showToast('Unable to save business information', 'error');
+        return false;
       }
     }
 
