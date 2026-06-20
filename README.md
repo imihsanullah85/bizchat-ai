@@ -1,6 +1,6 @@
 # BizChat AI
 
-WhatsApp AI assistant for Pakistani small businesses. Automatically responds to customer inquiries using Google Gemini AI.
+WhatsApp AI assistant for Pakistani small businesses. Automatically responds to customer inquiries using OpenRouter.
 
 ## Setup
 
@@ -15,7 +15,7 @@ npm install
 Copy `.env.example` to `.env` and fill in your credentials:
 
 ```bash
-GEMINI_API_KEY=your_key_here
+OPENROUTER_API_KEY=your_key_here
 WHATSAPP_TOKEN=your_meta_token
 VERIFY_TOKEN=your_webhook_verify_token
 ```
@@ -36,7 +36,7 @@ npm start
 ## Features
 
 - WhatsApp webhook receives customer messages
-- AI responses powered by Google Gemini
+- AI responses powered by OpenRouter
 - Business owner dashboard to manage shop info
 - Conversation history viewer
 - PKR pricing display

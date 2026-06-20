@@ -2,7 +2,6 @@ const express = require('express');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const path = require('path');
 
 const app = express();
@@ -152,8 +151,8 @@ app.use(session({
   cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 
-// Gemini AI setup
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// OpenRouter AI setup
+// Uses OPENROUTER_API_KEY from environment variables.
 
 // Helper: require auth
 function requireAuth(req, res, next) {
@@ -261,14 +260,30 @@ INSTRUCTIONS:
 - For questions not related to the business, politely redirect to business topics`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    const result = await model.generateContent([
-      { text: systemPrompt },
-      { text: `Customer message: ${customerMessage}` }
-    ]);
-    return result.response.text();
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-exp:free',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: customerMessage }
+        ]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) {
+      console.error('OpenRouter error:', data.error);
+      return 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.';
+    }
+
+    return data.choices?.[0]?.message?.content || 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.';
   } catch (error) {
-    console.error('Gemini error:', error);
+    console.error('OpenRouter fetch error:', error);
     return 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.';
   }
 }
