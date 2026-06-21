@@ -507,25 +507,37 @@ function getLoginPage() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Login</title>
   <style>
+    :root {
+      --bg: #06121f;
+      --surface: rgba(15, 23, 42, 0.96);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-strong: #0ea5e9;
+      --radius: 24px;
+      --shadow: 0 30px 70px rgba(15, 23, 42, 0.4);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at top left, #0f172a 0%, #1e293b 35%, #020617 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #f8fafc; }
-    body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(circle at 20% 20%, rgba(59,130,246,0.18), transparent 28%), radial-gradient(circle at 80% 10%, rgba(14,165,233,0.1), transparent 20%), radial-gradient(circle at 50% 90%, rgba(99,102,241,0.12), transparent 25%); pointer-events: none; }
-    .container { position: relative; width: min(100%, 420px); background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(148,163,184,0.2); border-radius: 32px; padding: 40px 36px; backdrop-filter: blur(24px); box-shadow: 0 40px 90px rgba(15,23,42,0.42); }
-    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 12px; color: #38bdf8; margin-bottom: 20px; }
-    .brand::before { content: '•'; color: #60a5fa; }
-    h1 { font-size: 34px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; }
-    p.subtitle { color: #cbd5e1; line-height: 1.7; margin-bottom: 32px; }
-    .form-group { margin-bottom: 20px; }
-    label { display: block; margin-bottom: 8px; font-size: 14px; color: #e2e8f0; }
-    input { width: 100%; border: 1px solid rgba(148,163,184,0.25); border-radius: 14px; padding: 14px 16px; background: rgba(255,255,255,0.05); color: #f8fafc; font-size: 15px; transition: border-color 0.2s, transform 0.2s; }
-    input::placeholder { color: #94a3b8; }
-    input:focus { outline: none; border-color: #38bdf8; transform: translateY(-1px); box-shadow: 0 0 0 4px rgba(56,189,248,0.12); }
-    button { width: 100%; padding: 16px; border-radius: 14px; border: none; background: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
-    button:hover { transform: translateY(-1px); opacity: 0.96; }
-    .footer { margin-top: 26px; text-align: center; color: #94a3b8; font-size: 14px; }
-    .footer a { color: #38bdf8; text-decoration: none; font-weight: 600; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 28%), radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.1), transparent 24%), var(--bg); color: var(--text); padding: 24px; }
+    body::before { content: ''; position: fixed; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,0.06), transparent); pointer-events: none; }
+    .container { width: min(100%, 460px); background: var(--surface); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: var(--radius); padding: 42px 36px; backdrop-filter: blur(22px); box-shadow: var(--shadow); position: relative; overflow: hidden; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; font-size: 12px; color: var(--primary); margin-bottom: 18px; }
+    h1 { font-size: 34px; font-weight: 800; margin-bottom: 10px; }
+    p.subtitle { color: var(--muted); line-height: 1.85; margin-bottom: 30px; }
+    .form-group { margin-bottom: 18px; }
+    label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary); }
+    input { width: 100%; border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 16px; padding: 14px 16px; background: rgba(255,255,255,0.08); color: var(--text); font-size: 15px; transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease; }
+    input::placeholder { color: rgba(255,255,255,0.55); }
+    input:focus { outline: none; border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.14); }
+    .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; border: none; background: linear-gradient(135deg, var(--primary), var(--primary-strong)); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, opacity 0.2s ease; }
+    .btn:hover { transform: translateY(-1px); opacity: 0.96; }
+    .footer { margin-top: 26px; text-align: center; color: var(--muted); font-size: 14px; }
+    .footer a { color: var(--primary); text-decoration: none; font-weight: 700; }
     .footer a:hover { text-decoration: underline; }
-    .error { background: rgba(248,113,113,0.12); color: #fecaca; border: 1px solid rgba(248,113,113,0.3); padding: 14px 16px; border-radius: 14px; margin-bottom: 22px; display: none; }
+    .error { background: rgba(248, 113, 113, 0.16); color: #fecaca; border: 1px solid rgba(248, 113, 113, 0.3); padding: 14px 16px; border-radius: 16px; margin-bottom: 22px; display: none; }
+    .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.35); border-top-color: white; border-radius: 999px; animation: spin 0.9s linear infinite; display: none; }
+    .btn.loading .spinner { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -543,15 +555,22 @@ function getLoginPage() {
         <label for="password">Password</label>
         <input type="password" id="password" required placeholder="Your secure password">
       </div>
-      <button type="submit">Sign In</button>
+      <button type="submit" class="btn"><span class="spinner"></span>Sign In</button>
     </form>
     <p class="footer">Don't have an account? <a href="/register">Create one</a></p>
   </div>
   <script>
+    const loginButton = document.querySelector('#loginForm button');
+    function setLoading(button, isLoading) {
+      if (!button) return;
+      button.classList.toggle('loading', isLoading);
+      button.disabled = isLoading;
+    }
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const error = document.getElementById('error');
       error.style.display = 'none';
+      setLoading(loginButton, true);
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
 
@@ -571,6 +590,8 @@ function getLoginPage() {
       } catch (err) {
         error.textContent = 'Login failed. Please try again.';
         error.style.display = 'block';
+      } finally {
+        setLoading(loginButton, false);
       }
     });
   </script>
@@ -586,25 +607,36 @@ function getRegisterPage() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Register</title>
   <style>
+    :root {
+      --bg: #06121f;
+      --surface: rgba(15, 23, 42, 0.94);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --primary: #22c55e;
+      --primary-strong: #16a34a;
+      --radius: 24px;
+      --shadow: 0 30px 70px rgba(15, 23, 42, 0.36);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: radial-gradient(circle at top left, #0f172a 0%, #1e293b 35%, #020617 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #f8fafc; padding: 24px; }
-    body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(circle at 20% 15%, rgba(16,185,129,0.16), transparent 24%), radial-gradient(circle at 80% 20%, rgba(59,130,246,0.14), transparent 18%); pointer-events: none; }
-    .container { position: relative; width: min(100%, 460px); background: rgba(15, 23, 42, 0.92); border: 1px solid rgba(148,163,184,0.18); border-radius: 32px; padding: 42px 38px; backdrop-filter: blur(24px); box-shadow: 0 40px 90px rgba(15,23,42,0.42); }
-    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 12px; color: #34d399; margin-bottom: 20px; }
-    .brand::before { content: '•'; color: #60a5fa; }
-    h1 { font-size: 34px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; }
-    p.subtitle { color: #cbd5e1; line-height: 1.7; margin-bottom: 32px; }
-    .form-group { margin-bottom: 20px; }
-    label { display: block; margin-bottom: 8px; font-size: 14px; color: #e2e8f0; }
-    input { width: 100%; border: 1px solid rgba(148,163,184,0.24); border-radius: 14px; padding: 14px 16px; background: rgba(255,255,255,0.05); color: #f8fafc; font-size: 15px; transition: border-color 0.2s, transform 0.2s; }
-    input::placeholder { color: #94a3b8; }
-    input:focus { outline: none; border-color: #34d399; transform: translateY(-1px); box-shadow: 0 0 0 4px rgba(52,211,153,0.14); }
-    button { width: 100%; padding: 16px; border-radius: 14px; border: none; background: linear-gradient(135deg, #22c55e 0%, #3b82f6 100%); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
-    button:hover { transform: translateY(-1px); opacity: 0.96; }
-    .footer { margin-top: 26px; text-align: center; color: #94a3b8; font-size: 14px; }
-    .footer a { color: #38bdf8; text-decoration: none; font-weight: 600; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at top left, rgba(16, 185, 129, 0.16), transparent 24%), radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.12), transparent 28%), var(--bg); color: var(--text); padding: 24px; }
+    .container { width: min(100%, 520px); background: var(--surface); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: var(--radius); padding: 44px 40px; box-shadow: var(--shadow); backdrop-filter: blur(20px); position: relative; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; font-size: 12px; color: var(--primary); margin-bottom: 18px; }
+    h1 { font-size: 34px; font-weight: 800; margin-bottom: 10px; }
+    p.subtitle { color: var(--muted); line-height: 1.8; margin-bottom: 28px; }
+    .form-group { margin-bottom: 18px; }
+    label { display: block; margin-bottom: 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary); }
+    input { width: 100%; border: 1px solid rgba(148, 163, 184, 0.24); border-radius: 16px; padding: 14px 16px; background: rgba(255,255,255,0.06); color: var(--text); font-size: 15px; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
+    input::placeholder { color: rgba(255,255,255,0.55); }
+    input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.12); }
+    .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; border: none; background: linear-gradient(135deg, var(--primary), var(--primary-strong)); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, opacity 0.2s ease; }
+    .btn:hover { transform: translateY(-1px); }
+    .footer { margin-top: 26px; text-align: center; color: var(--muted); font-size: 14px; }
+    .footer a { color: var(--primary); text-decoration: none; font-weight: 700; }
     .footer a:hover { text-decoration: underline; }
-    .error { background: rgba(248,113,113,0.12); color: #fecaca; border: 1px solid rgba(248,113,113,0.3); padding: 14px 16px; border-radius: 14px; margin-bottom: 22px; display: none; }
+    .error { background: rgba(248, 113, 113, 0.16); color: #fecaca; border: 1px solid rgba(248, 113, 113, 0.3); padding: 14px 16px; border-radius: 16px; margin-bottom: 20px; display: none; }
+    .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 999px; animation: spin 0.9s linear infinite; display: none; }
+    .btn.loading .spinner { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -626,19 +658,25 @@ function getRegisterPage() {
         <label for="password">Password</label>
         <input type="password" id="password" required placeholder="Create a password">
       </div>
-      <button type="submit">Create Account</button>
+      <button type="submit" class="btn"><span class="spinner"></span>Create Account</button>
     </form>
     <p class="footer">Already have an account? <a href="/login">Sign in</a></p>
   </div>
   <script>
+    const registerButton = document.querySelector('#registerForm button');
+    function setLoading(button, isLoading) {
+      if (!button) return;
+      button.classList.toggle('loading', isLoading);
+      button.disabled = isLoading;
+    }
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const error = document.getElementById('error');
       error.style.display = 'none';
+      setLoading(registerButton, true);
       const shop_name = document.getElementById('shop_name').value;
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
-
       try {
         const res = await fetch('/api/auth/register', {
           method: 'POST',
@@ -655,6 +693,8 @@ function getRegisterPage() {
       } catch (err) {
         error.textContent = 'Registration failed. Please try again.';
         error.style.display = 'block';
+      } finally {
+        setLoading(registerButton, false);
       }
     });
   </script>
