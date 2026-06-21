@@ -18,8 +18,10 @@ function loadData() {
     parsed.businesses = parsed.businesses || [];
     parsed.conversations = parsed.conversations || [];
     parsed.messages = parsed.messages || [];
+    console.log('loadData: loaded', DATA_FILE, 'businessCount=', parsed.businesses.length);
     return parsed;
   } catch (error) {
+    console.error('loadData: read error', error);
     return {
       nextIds: { business: 1, conversation: 1, message: 1 },
       businesses: [],
@@ -31,6 +33,7 @@ function loadData() {
 
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+  console.log('saveData: wrote', DATA_FILE, 'businessCount=', data.businesses.length);
   return data;
 }
 
@@ -242,7 +245,8 @@ async function handleWhatsAppMessage(msg, value) {
 
 async function generateAIResponse(business, customerMessage) {
   const businessRecord = getBusinessById(business.id) || business;
-  console.log('AI prompt business data:', businessRecord);
+  console.log('generateAIResponse: businessRecord loaded', businessRecord);
+  console.log('generateAIResponse: customerMessage=', customerMessage);
 
   const systemPrompt = `You are a helpful AI assistant for "${businessRecord.shop_name || 'the business'}", a business in Pakistan.
 
@@ -388,6 +392,7 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
   const business = getBusinessById(req.session.businessId);
+  console.log('GET /api/auth/me business loaded for id', req.session.businessId, business);
   res.json(business);
 });
 
@@ -405,20 +410,25 @@ app.put('/api/business', requireAuth, (req, res) => {
     shop_name, description, services, prices, timings,
     faqs, whatsapp_number, whatsapp_phone_id, payment_link
   };
+  console.log('PUT /api/business session businessId:', req.session.businessId);
   console.log('PUT /api/business incoming data:', incoming);
 
+  const updates = {};
+  [
+    'shop_name', 'description', 'services', 'prices', 'timings',
+    'faqs', 'whatsapp_number', 'whatsapp_phone_id', 'payment_link'
+  ].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+      updates[key] = req.body[key];
+    }
+  });
+
+  if (!Object.keys(updates).length) {
+    return res.status(400).json({ success: false, error: 'No update fields provided' });
+  }
+
   try {
-    const updatedBusiness = updateBusiness(req.session.businessId, {
-      shop_name: shop_name || '',
-      description: description || '',
-      services: services || '',
-      prices: prices || '',
-      timings: timings || '',
-      faqs: faqs || '',
-      whatsapp_number: whatsapp_number || '',
-      whatsapp_phone_id: whatsapp_phone_id || '',
-      payment_link: payment_link || ''
-    });
+    const updatedBusiness = updateBusiness(req.session.businessId, updates);
 
     if (!updatedBusiness) {
       console.error('Update failed: business not found for id', req.session.businessId);
@@ -1232,7 +1242,9 @@ function getSettingsPage() {
 
     async function loadSettings() {
       try {
+        console.log('loadSettings: fetching /api/auth/me');
         const data = await fetch('/api/auth/me').then(r => r.json());
+        console.log('loadSettings: received', data);
         if (data.error) {
           window.location = '/login';
           return;
@@ -1253,6 +1265,7 @@ function getSettingsPage() {
     }
 
     async function saveForm(formId, formData) {
+      console.log('saveForm:', formId, formData);
       const form = document.getElementById(formId);
       const btn = form.querySelector('.save-btn');
       const span = btn.querySelector('span:last-child');
