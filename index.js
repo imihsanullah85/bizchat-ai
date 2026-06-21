@@ -84,6 +84,36 @@ function updateBusiness(id, updates) {
   return business;
 }
 
+function sanitizeBusiness(business) {
+  if (!business) return null;
+  const { password_hash, ...safeBusiness } = business;
+  return safeBusiness;
+}
+
+function findDuplicateWhatsAppPhoneIds() {
+  const data = loadData();
+  const seen = {};
+  const duplicates = [];
+
+  for (const business of data.businesses) {
+    const phoneId = business.whatsapp_phone_id?.trim();
+    if (!phoneId) continue;
+
+    if (!seen[phoneId]) {
+      seen[phoneId] = [];
+    }
+    seen[phoneId].push(business.id);
+  }
+
+  for (const [phoneId, businessIds] of Object.entries(seen)) {
+    if (businessIds.length > 1) {
+      duplicates.push({ whatsapp_phone_id: phoneId, businessIds });
+    }
+  }
+
+  return duplicates;
+}
+
 function ensureConversation(businessId, customerPhone, customerName) {
   const data = loadData();
   let conversation = data.conversations.find(c => c.business_id === businessId && c.customer_phone === customerPhone);
@@ -391,9 +421,17 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  const business = getBusinessById(req.session.businessId);
+  const business = sanitizeBusiness(getBusinessById(req.session.businessId));
   console.log('GET /api/auth/me business loaded for id', req.session.businessId, business);
   res.json(business);
+});
+
+app.get('/api/validate/tenant-data', requireAuth, (req, res) => {
+  const duplicates = findDuplicateWhatsAppPhoneIds();
+  res.json({
+    valid: duplicates.length === 0,
+    duplicateWhatsAppMappings: duplicates.map(({ whatsapp_phone_id, businessIds }) => ({ whatsapp_phone_id, count: businessIds.length }))
+  });
 });
 
 // ============================================
@@ -435,8 +473,9 @@ app.put('/api/business', requireAuth, (req, res) => {
       return res.status(404).json({ success: false, error: 'Business not found' });
     }
 
-    console.log('Updated business record:', updatedBusiness);
-    res.json({ success: true, business: updatedBusiness });
+    const safeBusiness = sanitizeBusiness(updatedBusiness);
+    console.log('Updated business record:', safeBusiness);
+    res.json({ success: true, business: safeBusiness });
   } catch (error) {
     console.error('Update error:', error);
     res.status(500).json({ success: false, error: 'Update failed' });
@@ -1754,6 +1793,20 @@ function getNumbersPage() {
 </body>
 </html>`;
 }
+
+function validateStartupTenantData() {
+  const duplicates = findDuplicateWhatsAppPhoneIds();
+  if (duplicates.length > 0) {
+    console.warn('Tenant data validation warning: duplicate whatsapp_phone_id values found:');
+    duplicates.forEach((duplicate) => {
+      console.warn(`- ${duplicate.whatsapp_phone_id} used by business IDs: ${duplicate.businessIds.join(', ')}`);
+    });
+  } else {
+    console.log('Tenant data validation passed: no duplicate whatsapp_phone_id values found.');
+  }
+}
+
+validateStartupTenantData();
 
 // Start server
 app.listen(PORT, () => {
