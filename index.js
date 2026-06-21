@@ -1,87 +1,45 @@
 const express = require('express');
-const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const path = require('path');
+const { pool, createTables } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, 'bizchat-data.json');
 
-function loadData() {
-  try {
-    const raw = fs.readFileSync(DATA_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (!parsed.nextIds) {
-      parsed.nextIds = { business: 1, conversation: 1, message: 1 };
-    }
-    parsed.businesses = parsed.businesses || [];
-    parsed.conversations = parsed.conversations || [];
-    parsed.messages = parsed.messages || [];
-    console.log('loadData: loaded', DATA_FILE, 'businessCount=', parsed.businesses.length);
-    return parsed;
-  } catch (error) {
-    console.error('loadData: read error', error);
-    return {
-      nextIds: { business: 1, conversation: 1, message: 1 },
-      businesses: [],
-      conversations: [],
-      messages: []
-    };
-  }
+async function getBusinessByWhatsAppPhoneId(phoneId) {
+  const { rows } = await pool.query('SELECT * FROM businesses WHERE whatsapp_phone_id = $1', [phoneId]);
+  return rows[0];
 }
 
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
-  console.log('saveData: wrote', DATA_FILE, 'businessCount=', data.businesses.length);
-  return data;
+async function getBusinessByEmail(email) {
+  const { rows } = await pool.query('SELECT * FROM businesses WHERE email = $1', [email]);
+  return rows[0];
 }
 
-function getBusinessByWhatsAppPhoneId(phoneId) {
-  const data = loadData();
-  return data.businesses.find(b => b.whatsapp_phone_id === phoneId);
+async function getBusinessById(id) {
+  const { rows } = await pool.query('SELECT * FROM businesses WHERE id = $1', [id]);
+  return rows[0];
 }
 
-function getBusinessByEmail(email) {
-  const data = loadData();
-  return data.businesses.find(b => b.email === email);
+async function insertBusiness(email, passwordHash, shopName) {
+  const { rows } = await pool.query(
+    'INSERT INTO businesses (email, password_hash, shop_name, monthly_fee) VALUES ($1, $2, $3, $4) RETURNING *',
+    [email, passwordHash, shopName || 'My Shop', 5000]
+  );
+  return rows[0];
 }
 
-function getBusinessById(id) {
-  const data = loadData();
-  return data.businesses.find(b => b.id === id);
-}
+async function updateBusiness(id, updates) {
+  const keys = Object.keys(updates);
+  const setString = keys.map((key, i) => `"${key}" = $${i + 2}`).join(', ');
+  const values = [id, ...Object.values(updates)];
 
-function insertBusiness(email, passwordHash, shopName) {
-  const data = loadData();
-  const business = {
-    id: data.nextIds.business++,
-    email,
-    password_hash: passwordHash,
-    shop_name: shopName || 'My Shop',
-    description: '',
-    services: '',
-    prices: '',
-    timings: '',
-    faqs: '',
-    whatsapp_number: '',
-    whatsapp_phone_id: '',
-    payment_link: '',
-    monthly_fee: 5000,
-    created_at: new Date().toISOString()
-  };
-  data.businesses.push(business);
-  saveData(data);
-  return business;
-}
-
-function updateBusiness(id, updates) {
-  const data = loadData();
-  const business = data.businesses.find(b => b.id === id);
-  if (!business) return null;
-  Object.assign(business, updates);
-  saveData(data);
-  return business;
+  const { rows } = await pool.query(
+    `UPDATE businesses SET ${setString} WHERE id = $1 RETURNING *`,
+    values
+  );
+  return rows[0];
 }
 
 function sanitizeBusiness(business) {
@@ -90,88 +48,54 @@ function sanitizeBusiness(business) {
   return safeBusiness;
 }
 
-function findDuplicateWhatsAppPhoneIds() {
-  const data = loadData();
-  const seen = {};
-  const duplicates = [];
-
-  for (const business of data.businesses) {
-    const phoneId = business.whatsapp_phone_id?.trim();
-    if (!phoneId) continue;
-
-    if (!seen[phoneId]) {
-      seen[phoneId] = [];
-    }
-    seen[phoneId].push(business.id);
-  }
-
-  for (const [phoneId, businessIds] of Object.entries(seen)) {
-    if (businessIds.length > 1) {
-      duplicates.push({ whatsapp_phone_id: phoneId, businessIds });
-    }
-  }
-
-  return duplicates;
+async function findDuplicateWhatsAppPhoneIds() {
+  const { rows } = await pool.query(`
+    SELECT whatsapp_phone_id, ARRAY_AGG(id) as "businessIds"
+    FROM businesses 
+    WHERE whatsapp_phone_id IS NOT NULL AND whatsapp_phone_id != '' 
+    GROUP BY whatsapp_phone_id 
+    HAVING COUNT(*) > 1
+  `);
+  return rows;
 }
 
-function ensureConversation(businessId, customerPhone, customerName) {
-  const data = loadData();
-  let conversation = data.conversations.find(c => c.business_id === businessId && c.customer_phone === customerPhone);
-  if (!conversation) {
-    conversation = {
-      id: data.nextIds.conversation++,
-      business_id: businessId,
-      customer_phone: customerPhone,
-      customer_name: customerName || '',
-      created_at: new Date().toISOString()
-    };
-    data.conversations.push(conversation);
-    saveData(data);
-  }
-  return conversation;
+async function ensureConversation(businessId, customerPhone, customerName) {
+    const { rows } = await pool.query(
+    'INSERT INTO conversations (business_id, customer_phone, customer_name) VALUES ($1, $2, $3) ON CONFLICT (business_id, customer_phone) DO UPDATE SET customer_name = EXCLUDED.customer_name RETURNING *',
+    [businessId, customerPhone, customerName || '']
+  );
+  return rows[0];
 }
 
-function insertMessage(conversationId, direction, content) {
-  const data = loadData();
-  const message = {
-    id: data.nextIds.message++,
-    conversation_id: conversationId,
-    direction,
-    content,
-    timestamp: new Date().toISOString()
-  };
-  data.messages.push(message);
-  saveData(data);
-  return message;
+async function insertMessage(conversationId, direction, content) {
+    const { rows } = await pool.query(
+    'INSERT INTO messages (conversation_id, direction, content) VALUES ($1, $2, $3) RETURNING *',
+    [conversationId, direction, content]
+  );
+  return rows[0];
 }
 
-function getConversationsForBusiness(businessId) {
-  const data = loadData();
-  return data.conversations
-    .filter(c => c.business_id === businessId)
-    .map(c => {
-      const messages = data.messages.filter(m => m.conversation_id === c.id).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      const lastMessage = messages.length ? messages[messages.length - 1] : null;
-      return {
-        ...c,
-        message_count: messages.length,
-        last_message: lastMessage ? lastMessage.content : null,
-        last_message_time: lastMessage ? lastMessage.timestamp : null
-      };
-    })
-    .sort((a, b) => new Date(b.last_message_time || 0) - new Date(a.last_message_time || 0));
+async function getConversationsForBusiness(businessId) {
+    const { rows } = await pool.query(`
+    SELECT c.*,
+           (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id) as message_count,
+           (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message,
+           (SELECT timestamp FROM messages WHERE conversation_id = c.id ORDER BY timestamp DESC LIMIT 1) as last_message_time
+      FROM conversations c
+      WHERE c.business_id = $1
+      ORDER BY last_message_time DESC NULLS LAST
+  `, [businessId]);
+  return rows;
 }
 
-function getConversationByIdAndBusiness(id, businessId) {
-  const data = loadData();
-  return data.conversations.find(c => c.id === Number(id) && c.business_id === businessId);
+async function getConversationByIdAndBusiness(id, businessId) {
+    const { rows } = await pool.query('SELECT * FROM conversations WHERE id = $1 AND business_id = $2', [id, businessId]);
+    return rows[0];
 }
 
-function getMessagesForConversation(conversationId) {
-  const data = loadData();
-  return data.messages
-    .filter(m => m.conversation_id === Number(conversationId))
-    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+async function getMessagesForConversation(conversationId) {
+    const { rows } = await pool.query('SELECT * FROM messages WHERE conversation_id = $1 ORDER BY timestamp ASC', [conversationId]);
+    return rows;
 }
 
 // Middleware
@@ -250,7 +174,7 @@ async function handleWhatsAppMessage(msg, value) {
   if (!messageText) return;
 
   // Find business by WhatsApp phone ID
-  const business = getBusinessByWhatsAppPhoneId(businessPhoneId);
+  const business = await getBusinessByWhatsAppPhoneId(businessPhoneId);
 
   if (!business) {
     console.log('No business found for phone ID:', businessPhoneId);
@@ -258,23 +182,23 @@ async function handleWhatsAppMessage(msg, value) {
   }
 
   // Create or get conversation
-  const conversation = ensureConversation(business.id, customerPhone, customerName);
+  const conversation = await ensureConversation(business.id, customerPhone, customerName);
 
   // Store incoming message
-  insertMessage(conversation.id, 'in', messageText);
+  await insertMessage(conversation.id, 'in', messageText);
 
   // Generate AI response
   const aiResponse = await generateAIResponse(business, messageText);
 
   // Store outgoing message
-  insertMessage(conversation.id, 'out', aiResponse);
+  await insertMessage(conversation.id, 'out', aiResponse);
 
   // Send response to WhatsApp
   await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, aiResponse);
 }
 
 async function generateAIResponse(business, customerMessage) {
-  const businessRecord = getBusinessById(business.id) || business;
+  const businessRecord = await getBusinessById(business.id) || business;
   console.log('generateAIResponse: businessRecord loaded', businessRecord);
   console.log('generateAIResponse: customerMessage=', customerMessage);
 
@@ -371,13 +295,13 @@ app.post('/api/auth/register', async (req, res) => {
   }
 
   try {
-    const existing = getBusinessByEmail(email);
+    const existing = await getBusinessByEmail(email);
     if (existing) {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const business = insertBusiness(email, passwordHash, shop_name || 'My Shop');
+    const business = await insertBusiness(email, passwordHash, shop_name || 'My Shop');
 
     req.session.businessId = business.id;
     res.json({ success: true, businessId: business.id });
@@ -395,7 +319,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const business = getBusinessByEmail(email);
+    const business = await getBusinessByEmail(email);
 
     if (!business) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -420,14 +344,14 @@ app.post('/api/auth/logout', (req, res) => {
   });
 });
 
-app.get('/api/auth/me', requireAuth, (req, res) => {
-  const business = sanitizeBusiness(getBusinessById(req.session.businessId));
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  const business = sanitizeBusiness(await getBusinessById(req.session.businessId));
   console.log('GET /api/auth/me business loaded for id', req.session.businessId, business);
   res.json(business);
 });
 
-app.get('/api/validate/tenant-data', requireAuth, (req, res) => {
-  const duplicates = findDuplicateWhatsAppPhoneIds();
+app.get('/api/validate/tenant-data', requireAuth, async (req, res) => {
+  const duplicates = await findDuplicateWhatsAppPhoneIds();
   res.json({
     valid: duplicates.length === 0,
     duplicateWhatsAppMappings: duplicates.map(({ whatsapp_phone_id, businessIds }) => ({ whatsapp_phone_id, count: businessIds.length }))
@@ -438,7 +362,7 @@ app.get('/api/validate/tenant-data', requireAuth, (req, res) => {
 // BUSINESS ROUTES
 // ============================================
 
-app.put('/api/business', requireAuth, (req, res) => {
+app.put('/api/business', requireAuth, async (req, res) => {
   const {
     shop_name, description, services, prices, timings,
     faqs, whatsapp_number, whatsapp_phone_id, payment_link
@@ -466,7 +390,7 @@ app.put('/api/business', requireAuth, (req, res) => {
   }
 
   try {
-    const updatedBusiness = updateBusiness(req.session.businessId, updates);
+    const updatedBusiness = await updateBusiness(req.session.businessId, updates);
 
     if (!updatedBusiness) {
       console.error('Update failed: business not found for id', req.session.businessId);
@@ -486,19 +410,19 @@ app.put('/api/business', requireAuth, (req, res) => {
 // CONVERSATIONS ROUTES
 // ============================================
 
-app.get('/api/conversations', requireAuth, (req, res) => {
-  const conversations = getConversationsForBusiness(req.session.businessId);
+app.get('/api/conversations', requireAuth, async (req, res) => {
+  const conversations = await getConversationsForBusiness(req.session.businessId);
   res.json(conversations);
 });
 
-app.get('/api/conversations/:id/messages', requireAuth, (req, res) => {
-  const conversation = getConversationByIdAndBusiness(req.params.id, req.session.businessId);
+app.get('/api/conversations/:id/messages', requireAuth, async (req, res) => {
+  const conversation = await getConversationByIdAndBusiness(req.params.id, req.session.businessId);
 
   if (!conversation) {
     return res.status(404).json({ error: 'Conversation not found' });
   }
 
-  const messages = getMessagesForConversation(req.params.id);
+  const messages = await getMessagesForConversation(req.params.id);
 
   res.json({ conversation, messages });
 });
@@ -939,12 +863,13 @@ function getDashboardPage() {
   <script>
     async function loadDashboard() {
       try {
-        const me = await fetch('/api/auth/me').then(r => r.json());
-        if (me.error) {
+        const meRes = await fetch('/api/auth/me');
+        if (!meRes.ok) {
           window.location = '/login';
           return;
         }
-
+        const me = await meRes.json();
+        
         document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
 
         const convs = await fetch('/api/conversations').then(r => r.json());
@@ -952,21 +877,22 @@ function getDashboardPage() {
 
         // Count messages this month
         let monthlyMessages = 0;
-        const allMsgs = await Promise.all(convs.map(c => fetch('/api/conversations/' + c.id + '/messages').then(r => r.json())));
         const now = new Date();
         const currentMonth = now.getMonth();
         const currentYear = now.getFullYear();
         
-        allMsgs.forEach(m => {
-          if (m.messages) {
-            m.messages.forEach(msg => {
-              const msgDate = new Date(msg.timestamp);
-              if (msgDate.getMonth() === currentMonth && msgDate.getFullYear() === currentYear) {
-                monthlyMessages++;
-              }
-            });
-          }
-        });
+        for (const conv of convs) {
+            const messagesRes = await fetch(`/api/conversations/${conv.id}/messages`);
+            const { messages } = await messagesRes.json();
+            if(messages) {
+                messages.forEach(msg => {
+                    const msgDate = new Date(msg.timestamp);
+                    if (msgDate.getMonth() === currentMonth && msgDate.getFullYear() === currentYear) {
+                        monthlyMessages++;
+                    }
+                });
+            }
+        }
         document.getElementById('msgCount').textContent = monthlyMessages;
 
         // Calculate setup score
@@ -976,21 +902,21 @@ function getDashboardPage() {
           { key: 'payment_link', label: 'Payment Setup', hint: 'Add payment link for customers', icon: '💳' }
         ];
 
-        const completed = setupItems.filter(item => me[item.key]).length;
+        const completed = setupItems.filter(item => me[item.key] && me[item.key] !== '').length;
         const setupPercent = Math.round((completed / setupItems.length) * 100);
         document.getElementById('setupScore').textContent = setupPercent + '%';
 
         // Render setup checklist
         const setupList = document.getElementById('setupList');
-        setupList.innerHTML = setupItems.map(item => \`
+        setupList.innerHTML = setupItems.map(item => `
           <div class="setup-item" onclick="window.location='/settings'">
-            <div class="setup-check \${me[item.key] ? 'done' : ''}">\${me[item.key] ? '✓' : '✕'}</div>
+            <div class="setup-check ${me[item.key] && me[item.key] !== '' ? 'done' : ''}">${me[item.key] && me[item.key] !== '' ? '✓' : '✕'}</div>
             <div class="setup-label">
-              <div class="setup-label-title">\${item.label}</div>
-              <div class="setup-label-hint">\${item.hint}</div>
+              <div class="setup-label-title">${item.label}</div>
+              <div class="setup-label-hint">${item.hint}</div>
             </div>
           </div>
-        \`).join('');
+        `).join('');
 
         // Build activity feed
         const activities = [];
@@ -1001,44 +927,33 @@ function getDashboardPage() {
             time: new Date(me.created_at).toLocaleDateString()
           });
         }
-        if (me.shop_name) {
-          activities.push({
-            icon: '📋',
-            title: 'Business info updated',
-            time: 'Recently'
-          });
+        
+        const lastConv = convs[0];
+        if(lastConv) {
+             activities.push({
+                icon: '💬',
+                title: `New conversation with ${lastConv.customer_name || lastConv.customer_phone}`,
+                time: new Date(lastConv.created_at).toLocaleDateString()
+            });
         }
-        if (me.whatsapp_phone_id) {
-          activities.push({
-            icon: '📱',
-            title: 'WhatsApp connected',
-            time: 'Recently'
-          });
-        }
-        if (convs.length > 0) {
-          activities.push({
-            icon: '💬',
-            title: \`First conversation started\`,
-            time: 'Recently'
-          });
-        }
+
 
         const activityList = document.getElementById('activityList');
         if (activities.length === 0) {
-          activityList.innerHTML = \`<div class="empty-state">
+          activityList.innerHTML = `<div class="empty-state">
             <div class="empty-state-icon">📝</div>
             <div class="empty-state-text">Complete setup to get started</div>
-          </div>\`;
+          </div>`;
         } else {
-          activityList.innerHTML = activities.map(a => \`
+          activityList.innerHTML = activities.map(a => `
             <div class="activity-item">
-              <div class="activity-icon">\${a.icon}</div>
+              <div class="activity-icon">${a.icon}</div>
               <div class="activity-content">
-                <div class="activity-title">\${a.title}</div>
-                <div class="activity-time">\${a.time}</div>
+                <div class="activity-title">${a.title}</div>
+                <div class="activity-time">${a.time}</div>
               </div>
             </div>
-          \`).join('');
+          `).join('');
         }
 
         // Update WhatsApp status
@@ -1275,19 +1190,21 @@ function getSettingsPage() {
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
       toast.textContent = message;
-      toast.className = \`toast show \${type}\`;
+      toast.className = `toast show ${type}`;
       setTimeout(() => { toast.className = 'toast'; }, 3500);
     }
 
     async function loadSettings() {
       try {
         console.log('loadSettings: fetching /api/auth/me');
-        const data = await fetch('/api/auth/me').then(r => r.json());
-        console.log('loadSettings: received', data);
-        if (data.error) {
-          window.location = '/login';
-          return;
+        const res = await fetch('/api/auth/me');
+        if (!res.ok) {
+            window.location = '/login';
+            return;
         }
+        const data = await res.json();
+        console.log('loadSettings: received', data);
+        
         document.getElementById('businessNameSidebar').textContent = data.shop_name || 'Business';
         document.getElementById('shop_name').value = data.shop_name || '';
         document.getElementById('description').value = data.description || '';
@@ -1307,9 +1224,7 @@ function getSettingsPage() {
       console.log('saveForm:', formId, formData);
       const form = document.getElementById(formId);
       const btn = form.querySelector('.save-btn');
-      const span = btn.querySelector('span:last-child');
-      const origText = span.textContent;
-
+      
       btn.disabled = true;
       btn.classList.add('loading');
 
@@ -1323,8 +1238,9 @@ function getSettingsPage() {
 
         if (data.success) {
           showToast('✓ Saved successfully', 'success');
-          // Reload to show updated values
-          setTimeout(() => loadSettings(), 500);
+          if (data.business && data.business.shop_name) {
+             document.getElementById('businessNameSidebar').textContent = data.business.shop_name;
+          }
         } else {
           showToast('✕ ' + (data.error || 'Unable to save'), 'error');
         }
@@ -1499,36 +1415,39 @@ function getConversationPage(convId) {
   <script>
     async function loadConversation() {
       try {
-        const me = await fetch('/api/auth/me').then(r => r.json());
-        if (me.error) {
+        const meRes = await fetch('/api/auth/me');
+        if (!meRes.ok) {
           window.location = '/login';
           return;
         }
+        const me = await meRes.json();
         document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
 
-        const data = await fetch('/api/conversations/${convId}/messages').then(r => r.json());
-        if (data.error) {
-          window.location = '/dashboard';
-          return;
+        const dataRes = await fetch(`/api/conversations/${convId}/messages`);
+        if (!dataRes.ok) {
+            window.location = '/dashboard';
+            return;
         }
+        const data = await dataRes.json();
+        
         document.getElementById('customerName').textContent = data.conversation.customer_name || 'Customer';
         document.getElementById('customerPhone').textContent = data.conversation.customer_phone;
 
         const list = document.getElementById('msgList');
         if (data.messages.length === 0) {
-          list.innerHTML = \`<div class="empty-state">
+          list.innerHTML = `<div class="empty-state">
             <div class="empty-state-icon">📝</div>
             <div class="empty-state-text">No messages in this conversation</div>
-          </div>\`;
+          </div>`;
         } else {
-          list.innerHTML = data.messages.map(m => \`
-            <div class="msg \${m.direction}">
+          list.innerHTML = data.messages.map(m => `
+            <div class="msg ${m.direction}">
               <div>
-                <div class="msg-bubble">\${escapeHtml(m.content)}</div>
-                <div class="msg-time">\${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div class="msg-bubble">${escapeHtml(m.content)}</div>
+                <div class="msg-time">${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
             </div>
-          \`).join('');
+          `).join('');
           list.scrollTop = list.scrollHeight;
         }
       } catch (err) {
@@ -1537,6 +1456,7 @@ function getConversationPage(convId) {
     }
 
     function escapeHtml(text) {
+      if(typeof text !== 'string') return '';
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
@@ -1659,7 +1579,7 @@ function getNumbersPage() {
   <div class="main-content">
     <div class="top-bar">
       <h1 class="page-title">WhatsApp Numbers</h1>
-      <button class="primary-action" onclick="alert('Add number feature coming soon')">+ Add Number</button>
+      <button class="primary-action" onclick="window.location='/settings'">+ Add Number</button>
     </div>
     
     <div class="container">
@@ -1668,7 +1588,7 @@ function getNumbersPage() {
         <div class="empty-state-icon">📱</div>
         <h2 class="empty-state-title">No WhatsApp Numbers Yet</h2>
         <p class="empty-state-text">Connect your WhatsApp Business Account to start receiving messages and managing conversations.</p>
-        <button class="primary-action" onclick="alert('Setup coming soon')">Setup WhatsApp</button>
+        <button class="primary-action" onclick="window.location='/settings'">Setup WhatsApp</button>
       </div>
     </div>
   </div>
@@ -1679,38 +1599,43 @@ function getNumbersPage() {
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
       toast.textContent = message;
-      toast.className = \`toast show \${type}\`;
+      toast.className = `toast show ${type}`;
       setTimeout(() => { toast.className = 'toast'; }, 3000);
     }
 
     async function loadNumbers() {
       try {
-        const me = await fetch('/api/auth/me').then(r => r.json());
-        if (me.error) {
+        const meRes = await fetch('/api/auth/me');
+        if (!meRes.ok) {
           window.location = '/login';
           return;
         }
-
+        const me = await meRes.json();
+        
         document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
 
-        // Get all conversations to count messages
         const convs = await fetch('/api/conversations').then(r => r.json());
         
-        // Count messages by month for this number
         let messageCount = 0;
-        const allMessages = await Promise.all(convs.map(c => fetch('/api/conversations/' + c.id + '/messages').then(r => r.json())));
-        allMessages.forEach(m => {
-          if (m.messages) {
-            m.messages.forEach(msg => {
-              const msgDate = new Date(msg.timestamp);
-              const now = new Date();
-              if (msgDate.getMonth() === now.getMonth() && msgDate.getFullYear() === now.getFullYear()) {
-                messageCount++;
-              }
-            });
-          }
-        });
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
 
+        let lastMessageTime = 'Never';
+        if (convs.length > 0) {
+            const sortedConvs = convs.sort((a,b) => new Date(b.last_message_time) - new Date(a.last_message_time));
+            lastMessageTime = new Date(sortedConvs[0].last_message_time).toLocaleDateString();
+
+            for (const conv of convs) {
+                 if(conv.last_message_time){
+                    const msgDate = new Date(conv.last_message_time);
+                     if (msgDate.getMonth() === currentMonth && msgDate.getFullYear() === currentYear) {
+                        messageCount += (conv.message_count || 0);
+                    }
+                 }
+            }
+        }
+        
         const tableContainer = document.getElementById('numbersTable');
         const emptyState = document.getElementById('emptyState');
 
@@ -1720,17 +1645,14 @@ function getNumbersPage() {
           return;
         }
 
-        // Determine status
-        let status = 'verified';
-        let statusIcon = '✓';
-        if (!me.whatsapp_phone_id) status = 'unverified', statusIcon = '⚠';
-        if (!me.whatsapp_number) status = 'error', statusIcon = '✕';
+        let status = 'unverified';
+        let statusIcon = '⚠';
+        if(me.whatsapp_number && me.whatsapp_phone_id) {
+            status = 'verified';
+            statusIcon = '✓';
+        }
 
-        // Get last message time
-        const lastMsg = allMessages.flatMap(m => m.messages || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
-        const lastMsgTime = lastMsg ? new Date(lastMsg.timestamp).toLocaleDateString() : 'Never';
-
-        tableContainer.innerHTML = \`
+        tableContainer.innerHTML = `
           <div class="table-container">
             <table class="table">
               <thead>
@@ -1746,21 +1668,21 @@ function getNumbersPage() {
                 <tr>
                   <td>
                     <div class="number-row">
-                      <div class="status-indicator \${status === 'verified' ? 'active' : status === 'unverified' ? 'warning' : 'error'}"></div>
-                      <span>\${me.whatsapp_number}</span>
+                      <div class="status-indicator ${status === 'verified' ? 'active' : 'error'}"></div>
+                      <span>${me.whatsapp_number}</span>
                     </div>
                   </td>
                   <td>
-                    <span class="status-badge \${status}">\${statusIcon} \${status.charAt(0).toUpperCase() + status.slice(1)}</span>
+                    <span class="status-badge ${status}">${statusIcon} ${status.charAt(0).toUpperCase() + status.slice(1)}</span>
                   </td>
-                  <td>\${lastMsgTime}</td>
-                  <td><strong>\${messageCount}</strong></td>
-                  <td><button class="test-btn" onclick="testConnection('\${me.whatsapp_phone_id}')">Test Connection</button></td>
+                  <td>${lastMessageTime}</td>
+                  <td><strong>${messageCount}</strong></td>
+                  <td><button class="test-btn" onclick="testConnection('${me.whatsapp_phone_id}')">Test Connection</button></td>
                 </tr>
               </tbody>
             </table>
           </div>
-        \`;
+        `;
         emptyState.style.display = 'none';
       } catch (err) {
         console.error(err);
@@ -1794,23 +1716,32 @@ function getNumbersPage() {
 </html>`;
 }
 
-function validateStartupTenantData() {
-  const duplicates = findDuplicateWhatsAppPhoneIds();
-  if (duplicates.length > 0) {
-    console.warn('Tenant data validation warning: duplicate whatsapp_phone_id values found:');
-    duplicates.forEach((duplicate) => {
-      console.warn(`- ${duplicate.whatsapp_phone_id} used by business IDs: ${duplicate.businessIds.join(', ')}`);
-    });
-  } else {
-    console.log('Tenant data validation passed: no duplicate whatsapp_phone_id values found.');
+async function validateStartupTenantData() {
+  try {
+    const duplicates = await findDuplicateWhatsAppPhoneIds();
+    if (duplicates.length > 0) {
+      console.warn('Tenant data validation warning: duplicate whatsapp_phone_id values found:');
+      duplicates.forEach((duplicate) => {
+        console.warn(`- ${duplicate.whatsapp_phone_id} used by business IDs: ${duplicate.businessIds.join(', ')}`);
+      });
+    } else {
+      console.log('Tenant data validation passed: no duplicate whatsapp_phone_id values found.');
+    }
+  } catch(e) {
+      console.error('validateStartupTenantData error', e);
   }
 }
 
-validateStartupTenantData();
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`BizChat AI server running on port ${PORT}`);
-});
+async function startServer() {
+  await createTables();
+  await validateStartupTenantData();
+  app.listen(PORT, () => {
+    console.log(`BizChat AI server running on port ${PORT}`);
+  });
+}
+
+startServer();
 
 module.exports = app;

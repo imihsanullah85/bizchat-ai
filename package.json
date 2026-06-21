@@ -1,4 +1,4 @@
-{
+ {
   "name": "bizchat-ai",
   "version": "1.0.0",
   "description": "WhatsApp AI assistant for Pakistani small businesses",
@@ -11,7 +11,8 @@
   "dependencies": {
     "express": "^4.18.2",
     "bcryptjs": "^2.4.3",
-    "express-session": "^1.17.3"
+    "express-session": "^1.17.3",
+    "pg": "^8.11.3"
   },
   "engines": {
     "node": ">=18.0.0"
