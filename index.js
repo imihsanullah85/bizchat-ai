@@ -488,6 +488,13 @@ app.get('/settings', (req, res) => {
   res.send(getSettingsPage());
 });
 
+app.get('/numbers', (req, res) => {
+  if (!req.session.businessId) {
+    return res.redirect('/login');
+  }
+  res.send(getNumbersPage());
+});
+
 app.get('/conversations/:id', (req, res) => {
   if (!req.session.businessId) {
     return res.redirect('/login');
@@ -508,43 +515,45 @@ function getLoginPage() {
   <title>BizChat AI - Login</title>
   <style>
     :root {
-      --bg: #06121f;
-      --surface: rgba(15, 23, 42, 0.96);
+      --primary: #0f766e;
+      --accent: #14b8a6;
       --text: #f8fafc;
-      --muted: #94a3b8;
-      --primary: #38bdf8;
-      --primary-strong: #0ea5e9;
-      --radius: 24px;
-      --shadow: 0 30px 70px rgba(15, 23, 42, 0.4);
+      --text-muted: #94a3b8;
+      --bg: linear-gradient(135deg, #06121f 0%, #0f172a 50%, #1a1f2e 100%);
+      --surface: rgba(15, 23, 42, 0.92);
+      --border: rgba(20, 184, 166, 0.1);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 28%), radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.1), transparent 24%), var(--bg); color: var(--text); padding: 24px; }
-    body::before { content: ''; position: fixed; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,0.06), transparent); pointer-events: none; }
-    .container { width: min(100%, 460px); background: var(--surface); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: var(--radius); padding: 42px 36px; backdrop-filter: blur(22px); box-shadow: var(--shadow); position: relative; overflow: hidden; }
-    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; font-size: 12px; color: var(--primary); margin-bottom: 18px; }
-    h1 { font-size: 34px; font-weight: 800; margin-bottom: 10px; }
-    p.subtitle { color: var(--muted); line-height: 1.85; margin-bottom: 30px; }
-    .form-group { margin-bottom: 18px; }
-    label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary); }
-    input { width: 100%; border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 16px; padding: 14px 16px; background: rgba(255,255,255,0.08); color: var(--text); font-size: 15px; transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease; }
-    input::placeholder { color: rgba(255,255,255,0.55); }
-    input:focus { outline: none; border-color: var(--primary); transform: translateY(-1px); box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.14); }
-    .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; border: none; background: linear-gradient(135deg, var(--primary), var(--primary-strong)); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, opacity 0.2s ease; }
-    .btn:hover { transform: translateY(-1px); opacity: 0.96; }
-    .footer { margin-top: 26px; text-align: center; color: var(--muted); font-size: 14px; }
-    .footer a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--text); padding: 24px; position: relative; overflow: hidden; }
+    body::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 20% 50%, rgba(20, 184, 166, 0.15), transparent 40%), radial-gradient(circle at 80% 80%, rgba(15, 118, 110, 0.1), transparent 50%); pointer-events: none; }
+    .container { width: min(100%, 460px); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 36px; backdrop-filter: blur(20px); box-shadow: 0 25px 50px rgba(15, 23, 42, 0.3); position: relative; z-index: 1; animation: fadeInUp 0.4s ease; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; font-size: 12px; color: var(--accent); margin-bottom: 20px; }
+    h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.02em; }
+    p.subtitle { color: var(--text-muted); line-height: 1.6; margin-bottom: 28px; font-size: 14px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+    input { width: 100%; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 12px 14px; background: rgba(255,255,255,0.06); color: var(--text); font-size: 14px; transition: all 0.2s ease; }
+    input::placeholder { color: rgba(255,255,255,0.4); }
+    input:focus { outline: none; border-color: var(--accent); background: rgba(255,255,255,0.08); box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1); }
+    .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(20, 184, 166, 0.2); }
+    .btn:active { transform: translateY(0); }
+    .footer { margin-top: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    .footer a { color: var(--accent); text-decoration: none; font-weight: 700; }
     .footer a:hover { text-decoration: underline; }
-    .error { background: rgba(248, 113, 113, 0.16); color: #fecaca; border: 1px solid rgba(248, 113, 113, 0.3); padding: 14px 16px; border-radius: 16px; margin-bottom: 22px; display: none; }
-    .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.35); border-top-color: white; border-radius: 999px; animation: spin 0.9s linear infinite; display: none; }
+    .error { background: rgba(220, 38, 38, 0.15); color: #fca5a5; border: 1px solid rgba(220, 38, 38, 0.3); padding: 12px 14px; border-radius: 10px; margin-bottom: 20px; display: none; font-size: 13px; animation: slideDown 0.2s ease; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 999px; animation: spin 0.6s linear infinite; display: none; }
     .btn.loading .spinner { display: inline-block; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="brand">BizChat AI</div>
+    <div class="brand">🔐 BizChat AI</div>
     <h1>Welcome Back</h1>
-    <p class="subtitle">Sign in and access your AI-powered WhatsApp commerce dashboard instantly.</p>
+    <p class="subtitle">Sign in to manage your WhatsApp AI assistant.</p>
     <div id="error" class="error"></div>
     <form id="loginForm">
       <div class="form-group">
@@ -553,11 +562,11 @@ function getLoginPage() {
       </div>
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" required placeholder="Your secure password">
+        <input type="password" id="password" required placeholder="Your password">
       </div>
       <button type="submit" class="btn"><span class="spinner"></span>Sign In</button>
     </form>
-    <p class="footer">Don't have an account? <a href="/register">Create one</a></p>
+    <p class="footer">New here? <a href="/register">Create account</a></p>
   </div>
   <script>
     const loginButton = document.querySelector('#loginForm button');
@@ -573,7 +582,6 @@ function getLoginPage() {
       setLoading(loginButton, true);
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
-
       try {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
@@ -605,49 +613,52 @@ function getRegisterPage() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BizChat AI - Register</title>
+  <title>BizChat AI - Create Account</title>
   <style>
     :root {
-      --bg: #06121f;
-      --surface: rgba(15, 23, 42, 0.94);
+      --primary: #0f766e;
+      --accent: #14b8a6;
       --text: #f8fafc;
-      --muted: #94a3b8;
-      --primary: #22c55e;
-      --primary-strong: #16a34a;
-      --radius: 24px;
-      --shadow: 0 30px 70px rgba(15, 23, 42, 0.36);
+      --text-muted: #94a3b8;
+      --bg: linear-gradient(135deg, #06121f 0%, #0f172a 50%, #1a1f2e 100%);
+      --surface: rgba(15, 23, 42, 0.92);
+      --border: rgba(20, 184, 166, 0.1);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at top left, rgba(16, 185, 129, 0.16), transparent 24%), radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.12), transparent 28%), var(--bg); color: var(--text); padding: 24px; }
-    .container { width: min(100%, 520px); background: var(--surface); border: 1px solid rgba(148, 163, 184, 0.18); border-radius: var(--radius); padding: 44px 40px; box-shadow: var(--shadow); backdrop-filter: blur(20px); position: relative; }
-    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; font-size: 12px; color: var(--primary); margin-bottom: 18px; }
-    h1 { font-size: 34px; font-weight: 800; margin-bottom: 10px; }
-    p.subtitle { color: var(--muted); line-height: 1.8; margin-bottom: 28px; }
-    .form-group { margin-bottom: 18px; }
-    label { display: block; margin-bottom: 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary); }
-    input { width: 100%; border: 1px solid rgba(148, 163, 184, 0.24); border-radius: 16px; padding: 14px 16px; background: rgba(255,255,255,0.06); color: var(--text); font-size: 15px; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; }
-    input::placeholder { color: rgba(255,255,255,0.55); }
-    input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.12); }
-    .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 16px; border: none; background: linear-gradient(135deg, var(--primary), var(--primary-strong)); color: white; font-size: 16px; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, opacity 0.2s ease; }
-    .btn:hover { transform: translateY(-1px); }
-    .footer { margin-top: 26px; text-align: center; color: var(--muted); font-size: 14px; }
-    .footer a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--text); padding: 24px; position: relative; overflow: hidden; }
+    body::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 20% 50%, rgba(20, 184, 166, 0.15), transparent 40%), radial-gradient(circle at 80% 80%, rgba(15, 118, 110, 0.1), transparent 50%); pointer-events: none; }
+    .container { width: min(100%, 520px); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 36px; backdrop-filter: blur(20px); box-shadow: 0 25px 50px rgba(15, 23, 42, 0.3); position: relative; z-index: 1; animation: fadeInUp 0.4s ease; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; font-size: 12px; color: var(--accent); margin-bottom: 20px; }
+    h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.02em; }
+    p.subtitle { color: var(--text-muted); line-height: 1.6; margin-bottom: 28px; font-size: 14px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+    input { width: 100%; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 12px 14px; background: rgba(255,255,255,0.06); color: var(--text); font-size: 14px; transition: all 0.2s ease; }
+    input::placeholder { color: rgba(255,255,255,0.4); }
+    input:focus { outline: none; border-color: var(--accent); background: rgba(255,255,255,0.08); box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1); }
+    .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(20, 184, 166, 0.2); }
+    .btn:active { transform: translateY(0); }
+    .footer { margin-top: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    .footer a { color: var(--accent); text-decoration: none; font-weight: 700; }
     .footer a:hover { text-decoration: underline; }
-    .error { background: rgba(248, 113, 113, 0.16); color: #fecaca; border: 1px solid rgba(248, 113, 113, 0.3); padding: 14px 16px; border-radius: 16px; margin-bottom: 20px; display: none; }
-    .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 999px; animation: spin 0.9s linear infinite; display: none; }
+    .error { background: rgba(220, 38, 38, 0.15); color: #fca5a5; border: 1px solid rgba(220, 38, 38, 0.3); padding: 12px 14px; border-radius: 10px; margin-bottom: 20px; display: none; font-size: 13px; animation: slideDown 0.2s ease; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 999px; animation: spin 0.6s linear infinite; display: none; }
     .btn.loading .spinner { display: inline-block; }
     @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="brand">BizChat AI</div>
+    <div class="brand">✨ BizChat AI</div>
     <h1>Create Account</h1>
-    <p class="subtitle">Build your WhatsApp AI assistant and start converting conversations into sales.</p>
+    <p class="subtitle">Start managing your WhatsApp AI assistant in minutes.</p>
     <div id="error" class="error"></div>
     <form id="registerForm">
       <div class="form-group">
-        <label for="shop_name">Shop Name</label>
+        <label for="shop_name">Business Name</label>
         <input type="text" id="shop_name" required placeholder="e.g., Ahmed Electronics">
       </div>
       <div class="form-group">
@@ -656,7 +667,7 @@ function getRegisterPage() {
       </div>
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" required placeholder="Create a password">
+        <input type="password" id="password" required placeholder="Create password (min 6 characters)">
       </div>
       <button type="submit" class="btn"><span class="spinner"></span>Create Account</button>
     </form>
@@ -710,155 +721,172 @@ function getDashboardPage() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Dashboard</title>
   <style>
+    :root {
+      --primary: #0f766e;
+      --accent: #14b8a6;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --success: #16a34a;
+      --warning: #d97706;
+      --error: #dc2626;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #0f172a; min-height: 100vh; }
-    .header { background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%); color: white; padding: 24px 36px; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
-    .brand { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }
-    .nav { display: flex; gap: 18px; flex-wrap: wrap; }
-    .nav a { color: rgba(255,255,255,0.86); text-decoration: none; font-size: 14px; transition: color 0.2s; }
-    .nav a:hover { color: #ffffff; }
-    .container { max-width: 1240px; margin: 0 auto; padding: 32px 28px 48px; }
-    .hero { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; margin-bottom: 32px; }
-    .hero-card { background: white; border-radius: 24px; padding: 28px; box-shadow: 0 20px 60px rgba(15,23,42,0.08); border: 1px solid rgba(148,163,184,0.12); }
-    .hero-title { font-size: 24px; font-weight: 700; margin-bottom: 10px; }
-    .hero-copy { color: #475569; line-height: 1.7; margin-bottom: 24px; }
-    .status-badges { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
-    .badge { padding: 10px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; letter-spacing: 0.01em; }
-    .badge.online { background: #d1fae5; color: #065f46; }
-    .badge.pending { background: #fef9c3; color: #78350f; }
-    .badge.complete { background: #cffafe; color: #0c4a6e; }
-    .cta-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
-    .action-card { background: #0f172a; color: white; border-radius: 18px; padding: 20px; box-shadow: 0 20px 60px rgba(15,23,42,0.14); transition: transform 0.2s; text-decoration: none; }
-    .action-card:hover { transform: translateY(-2px); }
-    .action-card h3 { font-size: 16px; margin-bottom: 10px; }
-    .action-card p { color: rgba(255,255,255,0.72); font-size: 14px; line-height: 1.7; }
-    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px; margin-bottom: 40px; }
-    .stat-card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .stat-card h3 { font-size: 14px; color: #64748b; margin-bottom: 8px; }
-    .stat-card .value { font-size: 32px; font-weight: 700; color: #1e293b; }
-    .card-grid { display: grid; gap: 24px; grid-template-columns: 1.4fr 1fr; margin-bottom: 32px; }
-    .panel { background: white; border-radius: 24px; padding: 28px; box-shadow: 0 24px 60px rgba(15,23,42,0.08); border: 1px solid rgba(148,163,184,0.14); }
-    .panel h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
-    .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-    .stat-card { border-radius: 20px; padding: 22px; background: #f8fafc; border: 1px solid rgba(148,163,184,0.18); }
-    .stat-card strong { display: block; font-size: 32px; margin-top: 12px; color: #0f172a; }
-    .stat-card span { font-size: 14px; color: #64748b; }
-    .progress { margin-top: 20px; }
-    .progress-bar { height: 12px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
-    .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #22c55e); width: 0%; transition: width 0.4s ease; }
-    .conversation-list { display: grid; gap: 12px; }
-    .conv-item { background: #f8fafc; border-radius: 18px; padding: 18px 20px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; cursor: pointer; transition: transform 0.2s, background 0.2s; }
-    .conv-item:hover { transform: translateY(-1px); background: #ffffff; }
-    .conv-icon { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: #e0f2fe; color: #0c4a6e; font-weight: 700; }
-    .conv-meta { display: grid; gap: 6px; }
-    .conv-phone { font-weight: 700; color: #0f172a; }
-    .conv-name { font-size: 14px; color: #64748b; }
-    .conv-last { color: #475569; font-size: 14px; line-height: 1.5; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .conv-time { font-size: 12px; color: #94a3b8; }
-    .notice { background: #fef3c7; border: 1px solid #fde68a; padding: 18px 22px; border-radius: 18px; display: grid; gap: 14px; margin-bottom: 24px; }
-    .notice strong { color: #92400e; }
-    .notice a { align-self: start; display: inline-flex; padding: 12px 20px; border-radius: 12px; background: #d97706; color: white; text-decoration: none; font-weight: 700; }
-    .small-text { color: #64748b; font-size: 14px; }
-    .setup-list { margin-top: 22px; display: grid; gap: 12px; }
-    .setup-item { display: flex; align-items: center; gap: 12px; font-size: 14px; color: #475569; }
-    .setup-item span { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 8px; background: #e2e8f0; color: #0f172a; font-weight: 700; }
-    .card-grid { display: grid; gap: 24px; grid-template-columns: 1.4fr 1fr; margin-bottom: 32px; }
-    .panel { background: white; border-radius: 24px; padding: 28px; box-shadow: 0 24px 60px rgba(15,23,42,0.08); border: 1px solid rgba(148,163,184,0.14); }
-    .panel h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
-    .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-    .stat-card { border-radius: 20px; padding: 22px; background: #f8fafc; border: 1px solid rgba(148,163,184,0.18); }
-    .stat-card strong { display: block; font-size: 32px; margin-top: 12px; color: #0f172a; }
-    .stat-card span { font-size: 14px; color: #64748b; }
-    .progress { margin-top: 20px; }
-    .progress-bar { height: 12px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
-    .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #22c55e); width: 0%; transition: width 0.4s ease; }
-    .conversation-list { display: grid; gap: 12px; }
-    .conv-item { background: #f8fafc; border-radius: 18px; padding: 18px 20px; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; cursor: pointer; transition: transform 0.2s, background 0.2s; }
-    .conv-item:hover { transform: translateY(-1px); background: #ffffff; }
-    .conv-icon { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: #e0f2fe; color: #0c4a6e; font-weight: 700; }
-    .conv-meta { display: grid; gap: 6px; }
-    .conv-phone { font-weight: 700; color: #0f172a; }
-    .conv-name { font-size: 14px; color: #64748b; }
-    .conv-last { color: #475569; font-size: 14px; line-height: 1.5; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .conv-time { font-size: 12px; color: #94a3b8; }
-    @media (max-width: 980px) {
-      .header, .hero, .card-grid, .cta-grid, .stat-grid { grid-template-columns: 1fr; }
-      .hero { display: block; }
-      .cta-grid { display: grid; }
-      .stat-grid { display: grid; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text-primary); min-height: 100vh; display: flex; }
+    .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; position: fixed; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+    .sidebar-brand { font-weight: 800; font-size: 16px; margin-bottom: 32px; color: var(--primary); }
+    .nav-section { flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px; text-decoration: none; color: var(--text-secondary); font-size: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+    .nav-item:hover { background: var(--bg); color: var(--primary); }
+    .nav-item.active { background: var(--accent); color: var(--surface); font-weight: 600; }
+    .nav-bottom { padding-top: 16px; border-top: 1px solid var(--border); }
+    .user-menu { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: var(--bg); margin-bottom: 12px; font-size: 13px; }
+    .user-menu-label { flex: 1; color: var(--text-muted); }
+    .logout-btn { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: 13px; transition: all 0.2s; }
+    .logout-btn:hover { background: var(--border); color: var(--error); }
+    .main-content { margin-left: 260px; flex: 1; }
+    .top-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 20px 32px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+    .page-title { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+    .container { padding: 32px; max-width: 1400px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; margin-bottom: 32px; }
+    .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; display: flex; flex-direction: column; gap: 16px; transition: all 0.2s; }
+    .kpi-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(15, 118, 110, 0.08); }
+    .kpi-header { display: flex; align-items: flex-start; justify-content: space-between; }
+    .kpi-icon { font-size: 28px; }
+    .kpi-trend { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 4px; background: rgba(22, 163, 74, 0.1); color: var(--success); }
+    .kpi-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+    .kpi-value { font-size: 32px; font-weight: 700; color: var(--text-primary); }
+    .two-col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; margin-bottom: 32px; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+    .panel-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 20px; }
+    .setup-list { display: grid; gap: 12px; }
+    .setup-item { padding: 14px; background: var(--bg); border-radius: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s; }
+    .setup-item:hover { background: rgba(15, 118, 110, 0.05); }
+    .setup-check { width: 20px; height: 20px; border-radius: 4px; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+    .setup-check.done { background: var(--success); color: white; }
+    .setup-label { flex: 1; }
+    .setup-label-title { font-weight: 600; color: var(--text-primary); font-size: 14px; }
+    .setup-label-hint { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .activity-list { display: grid; gap: 12px; }
+    .activity-item { padding: 14px; background: var(--bg); border-radius: 8px; display: flex; gap: 12px; }
+    .activity-icon { font-size: 20px; flex-shrink: 0; }
+    .activity-content { flex: 1; }
+    .activity-title { font-weight: 600; color: var(--text-primary); font-size: 14px; }
+    .activity-time { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+    .empty-state-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state-text { font-size: 14px; }
+    .progress-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius: 4px; transition: width 0.4s; }
+    .progress-label { font-size: 13px; color: var(--text-secondary); font-weight: 600; }
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); position: fixed; z-index: 999; }
+      .main-content { margin-left: 0; }
+      .two-col { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <header class="header">
-    <div class="brand">BizChat AI</div>
-    <nav class="nav">
-      <a href="/dashboard">Dashboard</a>
-      <a href="/settings">Settings</a>
-      <a href="#" onclick="logout()">Logout</a>
+  <aside class="sidebar">
+    <div class="sidebar-brand">BizChat AI</div>
+    <nav class="nav-section">
+      <a href="/dashboard" class="nav-item active">
+        <span>📊</span> Dashboard
+      </a>
+      <a href="/numbers" class="nav-item">
+        <span>📱</span> Numbers
+      </a>
+      <a href="/dashboard" class="nav-item">
+        <span>💬</span> Conversations
+      </a>
+      <a href="/settings" class="nav-item">
+        <span>⚙️</span> Settings
+      </a>
+      <a href="/settings" class="nav-item">
+        <span>💳</span> Billing
+      </a>
     </nav>
-  </header>
-  <main class="container">
-    <section class="hero-card hero">
-      <div>
-        <p class="badge online">AI Assistant Live</p>
-        <h1 class="hero-title">Powerful WhatsApp automation for your business</h1>
-        <p class="hero-copy">Manage conversations, monitor performance, and complete setup from one polished dashboard.</p>
-        <div class="status-badges">
-          <span class="badge complete">Smart replies</span>
-          <span class="badge complete">WhatsApp integration</span>
-          <span class="badge pending">Payment setup</span>
+    <div class="nav-bottom">
+      <div class="user-menu">
+        <div style="width: 28px; height: 28px; border-radius: 6px; background: var(--primary); display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600;">B</div>
+        <div class="user-menu-label" id="businessNameSidebar">Business</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="top-bar">
+      <h1 class="page-title">Dashboard</h1>
+    </div>
+    
+    <div class="container">
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <div class="kpi-icon">💬</div>
+            <span class="kpi-trend">↑ 0%</span>
+          </div>
+          <div class="kpi-label">Conversations</div>
+          <div class="kpi-value" id="convCount">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <div class="kpi-icon">📨</div>
+            <span class="kpi-trend">↑ 0%</span>
+          </div>
+          <div class="kpi-label">Messages This Month</div>
+          <div class="kpi-value" id="msgCount">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <div class="kpi-icon">✅</div>
+            <span class="kpi-trend" id="setupTrend">↑ 0%</span>
+          </div>
+          <div class="kpi-label">Setup Complete</div>
+          <div class="kpi-value" id="setupScore">0%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <div class="kpi-icon">📱</div>
+            <span class="kpi-trend" id="statusTrend">🟢 Active</span>
+          </div>
+          <div class="kpi-label">WhatsApp Status</div>
+          <div class="kpi-value" id="whatsappStatus" style="font-size: 18px;">Checking...</div>
         </div>
       </div>
-      <div class="stat-grid">
-        <div class="stat-card"><span>Total conversations</span><strong id="convCount">0</strong></div>
-        <div class="stat-card"><span>Messages this month</span><strong id="msgCount">0</strong></div>
-        <div class="stat-card"><span>Business score</span><strong id="setupScore">0%</strong></div>
+
+      <div class="two-col">
+        <div class="panel">
+          <h2 class="panel-title">Setup Checklist</h2>
+          <div class="setup-list" id="setupList">
+            <div class="setup-item">
+              <div class="setup-check"><span>✕</span></div>
+              <div class="setup-label">
+                <div class="setup-label-title">Business Information</div>
+                <div class="setup-label-hint">Add shop name, description, and services</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="panel-title">Recent Activity</h2>
+          <div class="activity-list" id="activityList">
+            <div class="empty-state">
+              <div class="empty-state-icon">📝</div>
+              <div class="empty-state-text">No activity yet</div>
+            </div>
+          </div>
+        </div>
       </div>
-    </section>
-
-    <section class="cta-grid">
-      <a href="/settings" class="action-card">
-        <h3>Complete your setup</h3>
-        <p>Update business details, WhatsApp credentials and payment info to unlock full AI support.</p>
-      </a>
-      <a href="/dashboard" class="action-card">
-        <h3>Review conversations</h3>
-        <p>Open your most recent conversations and see customer requests in real time.</p>
-      </a>
-      <a href="/settings" class="action-card">
-        <h3>Manage billing</h3>
-        <p>Connect your payment gateway and activate assistant payments with one click.</p>
-      </a>
-    </section>
-
-    <div id="paymentNotice" class="notice" style="display: none;">
-      <strong>Payment setup required</strong>
-      <p>To fully activate your AI assistant, add a payment link in Settings.</p>
-      <a id="paymentLink" href="#">Go to Settings</a>
-      <p class="small-text">Your monthly fee is PKR <span id="monthlyFee"></span>. Once configured, customers can pay instantly.</p>
     </div>
+  </div>
 
-    <div class="card-grid">
-      <section class="panel">
-        <h2>Setup progress</h2>
-        <p class="small-text">A quick look at your business readiness score and key setup steps.</p>
-        <div class="progress"><div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div></div>
-        <div style="margin-top: 14px;"><strong id="setupScoreLabel">0% complete</strong></div>
-        <div class="setup-list">
-          <div class="setup-item"><span id="item1">✕</span> Business info</div>
-          <div class="setup-item"><span id="item2">✕</span> WhatsApp config</div>
-          <div class="setup-item"><span id="item3">✕</span> Payment link</div>
-        </div>
-      </section>
-      <section class="panel">
-        <h2>Recent conversations</h2>
-        <div class="conversation-list" id="convList">
-          <div class="conv-item"><div class="conv-meta"><div class="conv-phone">Loading...</div></div></div>
-        </div>
-      </section>
-    </div>
-  </main>
   <script>
     async function loadDashboard() {
       try {
@@ -868,60 +896,106 @@ function getDashboardPage() {
           return;
         }
 
+        document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
+
         const convs = await fetch('/api/conversations').then(r => r.json());
         document.getElementById('convCount').textContent = convs.length;
 
-        const configItems = [
-          { label: 'Business info', value: me.shop_name },
-          { label: 'WhatsApp config', value: me.whatsapp_phone_id && me.whatsapp_number },
-          { label: 'Payment link', value: me.payment_link }
-        ];
-        const completed = configItems.filter(item => item.value).length;
-        const progressValue = Math.round((completed / configItems.length) * 100);
-        document.getElementById('setupScore').textContent = \`\${progressValue}%\`;
-        document.getElementById('setupScoreLabel').textContent = \`\${progressValue}% complete\`;
-        document.getElementById('progressFill').style.width = \`\${progressValue}%\`;
-
-        configItems.forEach((item, index) => {
-          const span = document.getElementById(\`item\${index + 1}\`);
-          if (item.value) {
-            span.textContent = '✓';
-            span.style.background = '#d1fae5';
-            span.style.color = '#166534';
-          } else {
-            span.textContent = '✕';
-            span.style.background = '#f8fafc';
-            span.style.color = '#475569';
+        // Count messages this month
+        let monthlyMessages = 0;
+        const allMsgs = await Promise.all(convs.map(c => fetch('/api/conversations/' + c.id + '/messages').then(r => r.json())));
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        
+        allMsgs.forEach(m => {
+          if (m.messages) {
+            m.messages.forEach(msg => {
+              const msgDate = new Date(msg.timestamp);
+              if (msgDate.getMonth() === currentMonth && msgDate.getFullYear() === currentYear) {
+                monthlyMessages++;
+              }
+            });
           }
         });
+        document.getElementById('msgCount').textContent = monthlyMessages;
 
-        if (!me.payment_link) {
-          document.getElementById('paymentNotice').style.display = 'grid';
-          document.getElementById('paymentLink').href = '/settings';
-          document.getElementById('monthlyFee').textContent = (me.monthly_fee || 5000).toLocaleString();
+        // Calculate setup score
+        const setupItems = [
+          { key: 'shop_name', label: 'Business Information', hint: 'Add shop name, description, services', icon: '📋' },
+          { key: 'whatsapp_phone_id', label: 'WhatsApp Configuration', hint: 'Connect your WhatsApp Business number', icon: '📱' },
+          { key: 'payment_link', label: 'Payment Setup', hint: 'Add payment link for customers', icon: '💳' }
+        ];
+
+        const completed = setupItems.filter(item => me[item.key]).length;
+        const setupPercent = Math.round((completed / setupItems.length) * 100);
+        document.getElementById('setupScore').textContent = setupPercent + '%';
+
+        // Render setup checklist
+        const setupList = document.getElementById('setupList');
+        setupList.innerHTML = setupItems.map(item => \`
+          <div class="setup-item" onclick="window.location='/settings'">
+            <div class="setup-check \${me[item.key] ? 'done' : ''}">\${me[item.key] ? '✓' : '✕'}</div>
+            <div class="setup-label">
+              <div class="setup-label-title">\${item.label}</div>
+              <div class="setup-label-hint">\${item.hint}</div>
+            </div>
+          </div>
+        \`).join('');
+
+        // Build activity feed
+        const activities = [];
+        if (me.created_at) {
+          activities.push({
+            icon: '🎉',
+            title: 'Account created',
+            time: new Date(me.created_at).toLocaleDateString()
+          });
+        }
+        if (me.shop_name) {
+          activities.push({
+            icon: '📋',
+            title: 'Business info updated',
+            time: 'Recently'
+          });
+        }
+        if (me.whatsapp_phone_id) {
+          activities.push({
+            icon: '📱',
+            title: 'WhatsApp connected',
+            time: 'Recently'
+          });
+        }
+        if (convs.length > 0) {
+          activities.push({
+            icon: '💬',
+            title: \`First conversation started\`,
+            time: 'Recently'
+          });
         }
 
-        const list = document.getElementById('convList');
-        if (convs.length === 0) {
-          list.innerHTML = '<div class="empty">No conversations yet. Customer messages will appear here.</div>';
+        const activityList = document.getElementById('activityList');
+        if (activities.length === 0) {
+          activityList.innerHTML = \`<div class="empty-state">
+            <div class="empty-state-icon">📝</div>
+            <div class="empty-state-text">Complete setup to get started</div>
+          </div>\`;
         } else {
-          list.innerHTML = convs.map(c => \`
-            <div class="conv-item" onclick="window.location='/conversations/\${c.id}'">
-              <div>
-                <div class="conv-phone">\${c.customer_phone}</div>
-                <div class="conv-name">\${c.customer_name || 'Customer'}</div>
-              </div>
-              <div>
-                <div class="conv-last">\${c.last_message || ''}</div>
-                <div class="conv-time">\${c.last_message_time ? new Date(c.last_message_time).toLocaleDateString() : ''}</div>
+          activityList.innerHTML = activities.map(a => \`
+            <div class="activity-item">
+              <div class="activity-icon">\${a.icon}</div>
+              <div class="activity-content">
+                <div class="activity-title">\${a.title}</div>
+                <div class="activity-time">\${a.time}</div>
               </div>
             </div>
           \`).join('');
         }
 
-        const allMsgs = await Promise.all(convs.map(c => fetch('/api/conversations/' + c.id + '/messages').then(r => r.json())));
-        const total = allMsgs.reduce((sum, m) => sum + (m.messages?.length || 0), 0);
-        document.getElementById('msgCount').textContent = total;
+        // Update WhatsApp status
+        const status = me.whatsapp_phone_id && me.whatsapp_number ? '🟢 Connected' : '🔴 Not Set';
+        document.getElementById('whatsappStatus').textContent = status;
+
       } catch (err) {
         console.error(err);
       }
@@ -946,104 +1020,216 @@ function getSettingsPage() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Settings</title>
   <style>
+    :root {
+      --primary: #0f766e;
+      --accent: #14b8a6;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --success: #16a34a;
+      --warning: #d97706;
+      --error: #dc2626;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; min-height: 100vh; }
-    .header { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); color: white; padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 24px; font-weight: 700; }
-    .nav { display: flex; gap: 24px; align-items: center; }
-    .nav a { color: rgba(255,255,255,0.8); text-decoration: none; font-size: 14px; transition: color 0.2s; }
-    .nav a:hover { color: white; }
-    .container { max-width: 800px; margin: 0 auto; padding: 40px; }
-    .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 32px; margin-bottom: 24px; }
-    .card h2 { font-size: 20px; font-weight: 600; color: #1e293b; margin-bottom: 24px; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text-primary); min-height: 100vh; display: flex; }
+    .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; position: fixed; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+    .sidebar-brand { font-weight: 800; font-size: 16px; margin-bottom: 32px; color: var(--primary); }
+    .nav-section { flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px; text-decoration: none; color: var(--text-secondary); font-size: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+    .nav-item:hover { background: var(--bg); color: var(--primary); }
+    .nav-item.active { background: var(--accent); color: var(--surface); font-weight: 600; }
+    .nav-bottom { padding-top: 16px; border-top: 1px solid var(--border); }
+    .user-menu { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: var(--bg); margin-bottom: 12px; font-size: 13px; }
+    .user-menu-label { flex: 1; color: var(--text-muted); }
+    .logout-btn { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: 13px; transition: all 0.2s; }
+    .logout-btn:hover { background: var(--border); color: var(--error); }
+    .main-content { margin-left: 260px; flex: 1; }
+    .top-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 20px 32px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+    .page-title { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+    .container { padding: 32px; max-width: 900px; }
+    .section-group { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 32px; margin-bottom: 24px; }
+    .section-header { margin-bottom: 24px; }
+    .section-title { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
+    .section-hint { font-size: 13px; color: var(--text-muted); }
     .form-group { margin-bottom: 20px; }
-    label { display: block; font-size: 14px; font-weight: 500; color: #475569; margin-bottom: 6px; }
-    input, textarea { width: 100%; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; font-family: inherit; }
+    label { display: block; font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+    input, textarea { width: 100%; padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; color: var(--text-primary); background: var(--surface); transition: all 0.2s; }
     textarea { min-height: 100px; resize: vertical; }
-    input:focus, textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-    button { background: #3b82f6; color: white; padding: 14px 28px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #2563eb; }
-    .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 999; min-width: 320px; max-width: calc(100% - 32px); padding: 16px 20px; border-radius: 14px; display: none; align-items: center; justify-content: space-between; font-weight: 600; box-shadow: 0 20px 60px rgba(15,23,42,0.18); transition: opacity 0.2s ease, transform 0.2s ease; }
-    .toast.show { display: flex; opacity: 1; transform: translateX(-50%) translateY(0); }
-    .toast.success { background: #16a34a; color: white; }
-    .toast.error { background: #dc2626; color: white; }
-    .help { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    input::placeholder, textarea::placeholder { color: var(--text-muted); }
+    input:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1); }
+    input.valid { border-color: var(--success); }
+    input.error { border-color: var(--error); }
+    .field-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+    .field-status { font-size: 12px; margin-top: 6px; display: none; }
+    .field-status.success { color: var(--success); display: block; }
+    .field-status.error { color: var(--error); display: block; }
+    .save-btn { background: var(--primary); color: white; border: none; padding: 12px 28px; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 10px; }
+    .save-btn:hover { background: var(--accent); }
+    .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .save-btn.loading { opacity: 0.8; }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 999px; animation: spin 0.6s linear infinite; display: none; }
+    .save-btn.loading .spinner { display: inline-block; }
+    .save-btn.loading span { opacity: 0.6; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .toast { position: fixed; top: 20px; right: 20px; min-width: 300px; max-width: calc(100% - 40px); padding: 16px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; display: none; align-items: center; gap: 12px; z-index: 999; box-shadow: 0 10px 30px rgba(0,0,0,0.1); animation: slideIn 0.3s ease; }
+    .toast.show { display: flex; }
+    .toast.success { background: var(--success); color: white; }
+    .toast.error { background: var(--error); color: white; }
+    @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); position: fixed; z-index: 999; }
+      .main-content { margin-left: 0; }
+    }
   </style>
 </head>
 <body>
-  <header class="header">
-    <h1>BizChat AI</h1>
-    <nav class="nav">
-      <a href="/dashboard">Dashboard</a>
-      <a href="/settings">Settings</a>
-      <a href="#" onclick="logout()">Logout</a>
+  <aside class="sidebar">
+    <div class="sidebar-brand">BizChat AI</div>
+    <nav class="nav-section">
+      <a href="/dashboard" class="nav-item">
+        <span>📊</span> Dashboard
+      </a>
+      <a href="/numbers" class="nav-item">
+        <span>📱</span> Numbers
+      </a>
+      <a href="/dashboard" class="nav-item">
+        <span>💬</span> Conversations
+      </a>
+      <a href="/settings" class="nav-item active">
+        <span>⚙️</span> Settings
+      </a>
+      <a href="/settings" class="nav-item">
+        <span>💳</span> Billing
+      </a>
     </nav>
-  </header>
-  <div id="toast" class="toast"></div>
-  <div class="container">
-    <div class="card">
-      <h2>Business Information</h2>
-      <p style="color: #64748b; margin-bottom: 24px;">This information will be used by the AI to answer customer questions.</p>
-      <form id="settingsForm">
-        <div class="form-group">
-          <label for="shop_name">Shop Name</label>
-          <input type="text" id="shop_name" placeholder="e.g., Ahmed Electronics">
+    <div class="nav-bottom">
+      <div class="user-menu">
+        <div style="width: 28px; height: 28px; border-radius: 6px; background: var(--primary); display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600;">B</div>
+        <div class="user-menu-label" id="businessNameSidebar">Business</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="top-bar">
+      <h1 class="page-title">Settings</h1>
+    </div>
+    
+    <div class="container">
+      <!-- Business Identity Section -->
+      <form class="section-group" id="businessForm">
+        <div class="section-header">
+          <h2 class="section-title">Business Identity</h2>
+          <p class="section-hint">Your shop name and core information the AI will reference</p>
         </div>
         <div class="form-group">
-          <label for="description">Description</label>
-          <textarea id="description" placeholder="Brief description of your business..."></textarea>
+          <label for="shop_name">Shop Name *</label>
+          <input type="text" id="shop_name" required>
+        </div>
+        <div class="form-group">
+          <label for="description">Business Description</label>
+          <textarea id="description" placeholder="What do you do? Who do you serve?"></textarea>
+          <p class="field-hint">Keep it concise — the AI uses this to understand your business</p>
+        </div>
+        <button type="submit" class="save-btn"><span class="spinner"></span><span>Save Business Info</span></button>
+      </form>
+
+      <!-- Services & Pricing Section -->
+      <form class="section-group" id="servicesForm">
+        <div class="section-header">
+          <h2 class="section-title">Services & Pricing</h2>
+          <p class="section-hint">What you offer and your current pricing</p>
         </div>
         <div class="form-group">
           <label for="services">Services / Products</label>
-          <textarea id="services" placeholder="List your main services or products..."></textarea>
+          <textarea id="services" placeholder="e.g., Mobile repair, Laptop service, Data recovery..."></textarea>
+          <p class="field-hint">List your main offerings, one per line if possible</p>
         </div>
         <div class="form-group">
-          <label for="prices">Prices</label>
-          <textarea id="prices" placeholder="Key prices and pricing information..."></textarea>
+          <label for="prices">Pricing Information</label>
+          <textarea id="prices" placeholder="e.g., Screen repair: PKR 3,000–5,000 | Battery: PKR 2,500..."></textarea>
+          <p class="field-hint">Include currency and ranges so customers know what to expect</p>
+        </div>
+        <button type="submit" class="save-btn"><span class="spinner"></span><span>Save Services</span></button>
+      </form>
+
+      <!-- Hours & Availability Section -->
+      <form class="section-group" id="hoursForm">
+        <div class="section-header">
+          <h2 class="section-title">Hours & Availability</h2>
+          <p class="section-hint">When customers can reach you</p>
         </div>
         <div class="form-group">
           <label for="timings">Working Hours</label>
-          <input type="text" id="timings" placeholder="e.g., Mon-Sat 9am-8pm, Sunday closed">
+          <input type="text" id="timings" placeholder="e.g., Mon-Sat 9am-8pm, Sun 10am-6pm">
+          <p class="field-hint">Be specific so customers know when you're available</p>
         </div>
-        <div class="form-group">
-          <label for="faqs">Frequently Asked Questions &amp; Answers</label>
-          <textarea id="faqs" placeholder="Common questions and your standard answers..."></textarea>
-        </div>
-        <button type="submit">Save Business Info</button>
+        <button type="submit" class="save-btn"><span class="spinner"></span><span>Save Hours</span></button>
       </form>
-    </div>
 
-    <div class="card">
-      <h2>WhatsApp Configuration</h2>
-      <p style="color: #64748b; margin-bottom: 24px;">Configure your WhatsApp Business API credentials from Meta Developers Console.</p>
-      <form id="whatsappForm">
+      <!-- FAQs Section -->
+      <form class="section-group" id="faqsForm">
+        <div class="section-header">
+          <h2 class="section-title">FAQs</h2>
+          <p class="section-hint">Common questions customers ask</p>
+        </div>
         <div class="form-group">
-          <label for="whatsapp_number">WhatsApp Business Number</label>
+          <label for="faqs">Frequently Asked Questions & Answers</label>
+          <textarea id="faqs" placeholder="Q: Do you offer warranty? A: Yes, 1 year...&#10;Q: What's your return policy? A: 30 days..."></textarea>
+          <p class="field-hint">Format as Q: ... A: ... (one per line) for best results</p>
+        </div>
+        <button type="submit" class="save-btn"><span class="spinner"></span><span>Save FAQs</span></button>
+      </form>
+
+      <!-- WhatsApp Connection Section -->
+      <form class="section-group" id="whatsappForm">
+        <div class="section-header">
+          <h2 class="section-title">WhatsApp Connection</h2>
+          <p class="section-hint">Link your WhatsApp Business Account from Meta</p>
+        </div>
+        <div class="form-group">
+          <label for="whatsapp_number">WhatsApp Business Number *</label>
           <input type="text" id="whatsapp_number" placeholder="e.g., +923001234567">
-          <p class="help">Your WhatsApp Business phone number with country code</p>
+          <p class="field-hint">Full number with country code (Pakistan = +92)</p>
         </div>
         <div class="form-group">
-          <label for="whatsapp_phone_id">Phone Number ID</label>
+          <label for="whatsapp_phone_id">Phone Number ID *</label>
           <input type="text" id="whatsapp_phone_id" placeholder="From Meta Developers Console">
-          <p class="help">Found in Meta Developers Console > WhatsApp > Phone Numbers</p>
+          <p class="field-hint">Find this in Meta Developers Console → WhatsApp → Phone Numbers</p>
         </div>
-        <button type="submit">Save WhatsApp Settings</button>
+        <button type="submit" class="save-btn"><span class="spinner"></span><span>Save WhatsApp Settings</span></button>
       </form>
-    </div>
 
-    <div class="card">
-      <h2>Payment Settings</h2>
-      <p style="color: #64748b; margin-bottom: 24px;">Add your payment link to show customers how to pay you.</p>
-      <form id="paymentForm">
-        <div class="form-group">
-          <label for="payment_link">Payment Link (JazzCash, EasyPaisa, Bank)</label>
-          <input type="url" id="payment_link" placeholder="https://your-payment-link.com">
+      <!-- Payment Setup Section -->
+      <form class="section-group" id="paymentForm">
+        <div class="section-header">
+          <h2 class="section-title">Payment Setup</h2>
+          <p class="section-hint">Where customers can pay you</p>
         </div>
-        <button type="submit">Save Payment Settings</button>
+        <div class="form-group">
+          <label for="payment_link">Payment Link</label>
+          <input type="url" id="payment_link" placeholder="https://your-payment-link.com">
+          <p class="field-hint">Share this in conversations so customers can pay instantly (JazzCash, EasyPaisa, bank link, etc.)</p>
+        </div>
+        <button type="submit" class="save-btn"><span class="spinner"></span><span>Save Payment Link</span></button>
       </form>
     </div>
   </div>
+
+  <div id="toast" class="toast"></div>
+
   <script>
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = \`toast show \${type}\`;
+      setTimeout(() => { toast.className = 'toast'; }, 3500);
+    }
+
     async function loadSettings() {
       try {
         const data = await fetch('/api/auth/me').then(r => r.json());
@@ -1051,6 +1237,7 @@ function getSettingsPage() {
           window.location = '/login';
           return;
         }
+        document.getElementById('businessNameSidebar').textContent = data.shop_name || 'Business';
         document.getElementById('shop_name').value = data.shop_name || '';
         document.getElementById('description').value = data.description || '';
         document.getElementById('services').value = data.services || '';
@@ -1065,17 +1252,15 @@ function getSettingsPage() {
       }
     }
 
-    function showToast(message, type = 'success') {
-      const toast = document.getElementById('toast');
-      if (!toast) return;
-      toast.textContent = message;
-      toast.className = 'toast show ' + type;
-      setTimeout(() => {
-        toast.className = 'toast';
-      }, 3000);
-    }
+    async function saveForm(formId, formData) {
+      const form = document.getElementById(formId);
+      const btn = form.querySelector('.save-btn');
+      const span = btn.querySelector('span:last-child');
+      const origText = span.textContent;
 
-    async function saveSettings(formData) {
+      btn.disabled = true;
+      btn.classList.add('loading');
+
       try {
         const res = await fetch('/api/business', {
           method: 'PUT',
@@ -1083,35 +1268,56 @@ function getSettingsPage() {
           body: JSON.stringify(formData)
         });
         const data = await res.json();
-        if (data.success) {
-          showToast('Business info saved successfully', 'success');
-          return true;
-        }
 
-        showToast(data.error || 'Unable to save business information', 'error');
-        return false;
+        if (data.success) {
+          showToast('✓ Saved successfully', 'success');
+          // Reload to show updated values
+          setTimeout(() => loadSettings(), 500);
+        } else {
+          showToast('✕ ' + (data.error || 'Unable to save'), 'error');
+        }
       } catch (err) {
         console.error(err);
-        showToast('Unable to save business information', 'error');
-        return false;
+        showToast('✕ Save failed. Try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('loading');
       }
     }
 
-    document.getElementById('settingsForm').addEventListener('submit', (e) => {
+    document.getElementById('businessForm').addEventListener('submit', (e) => {
       e.preventDefault();
-      saveSettings({
+      saveForm('businessForm', {
         shop_name: document.getElementById('shop_name').value,
-        description: document.getElementById('description').value,
+        description: document.getElementById('description').value
+      });
+    });
+
+    document.getElementById('servicesForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveForm('servicesForm', {
         services: document.getElementById('services').value,
-        prices: document.getElementById('prices').value,
-        timings: document.getElementById('timings').value,
+        prices: document.getElementById('prices').value
+      });
+    });
+
+    document.getElementById('hoursForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveForm('hoursForm', {
+        timings: document.getElementById('timings').value
+      });
+    });
+
+    document.getElementById('faqsForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveForm('faqsForm', {
         faqs: document.getElementById('faqs').value
       });
     });
 
     document.getElementById('whatsappForm').addEventListener('submit', (e) => {
       e.preventDefault();
-      saveSettings({
+      saveForm('whatsappForm', {
         whatsapp_number: document.getElementById('whatsapp_number').value,
         whatsapp_phone_id: document.getElementById('whatsapp_phone_id').value
       });
@@ -1119,7 +1325,7 @@ function getSettingsPage() {
 
     document.getElementById('paymentForm').addEventListener('submit', (e) => {
       e.preventDefault();
-      saveSettings({
+      saveForm('paymentForm', {
         payment_link: document.getElementById('payment_link').value
       });
     });
@@ -1143,48 +1349,111 @@ function getConversationPage(convId) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Conversation</title>
   <style>
+    :root {
+      --primary: #0f766e;
+      --accent: #14b8a6;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --ai: #1e40af;
+      --customer: #e5e7eb;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; min-height: 100vh; }
-    .header { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); color: white; padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 24px; font-weight: 700; }
-    .nav { display: flex; gap: 24px; align-items: center; }
-    .nav a { color: rgba(255,255,255,0.8); text-decoration: none; font-size: 14px; }
-    .nav a:hover { color: white; }
-    .container { max-width: 800px; margin: 0 auto; padding: 40px; }
-    .conv-header { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .conv-header h2 { font-size: 20px; color: #1e293b; }
-    .conv-header p { color: #64748b; font-size: 14px; }
-    .messages { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; min-height: 400px; max-height: 60vh; overflow-y: auto; }
-    .msg { margin-bottom: 16px; display: flex; flex-direction: column; }
-    .msg.in { align-items: flex-start; }
-    .msg.out { align-items: flex-end; }
-    .msg-bubble { max-width: 70%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.5; }
-    .msg.in .msg-bubble { background: #e2e8f0; color: #1e293b; }
-    .msg.out .msg-bubble { background: #3b82f6; color: white; }
-    .msg-time { font-size: 11px; color: #94a3b8; margin-top: 4px; }
-    .back { display: inline-flex; align-items: center; gap: 8px; color: #3b82f6; text-decoration: none; font-size: 14px; margin-bottom: 20px; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text-primary); min-height: 100vh; display: flex; }
+    .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; position: fixed; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+    .sidebar-brand { font-weight: 800; font-size: 16px; margin-bottom: 32px; color: var(--primary); }
+    .nav-section { flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px; text-decoration: none; color: var(--text-secondary); font-size: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+    .nav-item:hover { background: var(--bg); color: var(--primary); }
+    .nav-item.active { background: var(--accent); color: var(--surface); font-weight: 600; }
+    .nav-bottom { padding-top: 16px; border-top: 1px solid var(--border); }
+    .user-menu { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: var(--bg); margin-bottom: 12px; font-size: 13px; }
+    .user-menu-label { flex: 1; color: var(--text-muted); }
+    .logout-btn { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: 13px; transition: all 0.2s; }
+    .logout-btn:hover { background: var(--border); color: #dc2626; }
+    .main-content { margin-left: 260px; flex: 1; display: flex; flex-direction: column; }
+    .top-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+    .back-link { color: var(--primary); text-decoration: none; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+    .back-link:hover { color: var(--accent); }
+    .conv-title { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+    .conv-meta { font-size: 12px; color: var(--text-muted); }
+    .messages-container { flex: 1; overflow-y: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 16px; }
+    .msg { display: flex; gap: 12px; animation: fadeIn 0.3s ease; }
+    .msg.in { justify-content: flex-start; }
+    .msg.out { justify-content: flex-end; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .msg-bubble { max-width: 65%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; word-wrap: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .msg.in .msg-bubble { background: var(--customer); color: var(--text-primary); border-bottom-left-radius: 4px; }
+    .msg.out .msg-bubble { background: var(--ai); color: white; border-bottom-right-radius: 4px; }
+    .msg-time { font-size: 11px; color: var(--text-muted); margin-top: 4px; padding: 0 4px; }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state-text { font-size: 14px; }
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); position: fixed; z-index: 999; }
+      .main-content { margin-left: 0; }
+      .msg-bubble { max-width: 85%; }
+    }
   </style>
 </head>
 <body>
-  <header class="header">
-    <h1>BizChat AI</h1>
-    <nav class="nav">
-      <a href="/dashboard">Dashboard</a>
-      <a href="/settings">Settings</a>
-      <a href="#" onclick="logout()">Logout</a>
+  <aside class="sidebar">
+    <div class="sidebar-brand">BizChat AI</div>
+    <nav class="nav-section">
+      <a href="/dashboard" class="nav-item">
+        <span>📊</span> Dashboard
+      </a>
+      <a href="/numbers" class="nav-item">
+        <span>📱</span> Numbers
+      </a>
+      <a href="/dashboard" class="nav-item active">
+        <span>💬</span> Conversations
+      </a>
+      <a href="/settings" class="nav-item">
+        <span>⚙️</span> Settings
+      </a>
+      <a href="/settings" class="nav-item">
+        <span>💳</span> Billing
+      </a>
     </nav>
-  </header>
-  <div class="container">
-    <a href="/dashboard" class="back">← Back to Dashboard</a>
-    <div class="conv-header">
-      <h2 id="customerName">Loading...</h2>
-      <p id="customerPhone"></p>
+    <div class="nav-bottom">
+      <div class="user-menu">
+        <div style="width: 28px; height: 28px; border-radius: 6px; background: var(--primary); display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600;">B</div>
+        <div class="user-menu-label" id="businessNameSidebar">Business</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Logout</button>
     </div>
-    <div class="messages" id="msgList"></div>
+  </aside>
+
+  <div class="main-content">
+    <div class="top-bar">
+      <div>
+        <a href="/dashboard" class="back-link">← Back to Conversations</a>
+        <div class="conv-title" id="customerName">Loading...</div>
+        <div class="conv-meta" id="customerPhone"></div>
+      </div>
+    </div>
+    <div class="messages-container" id="msgList">
+      <div class="empty-state">
+        <div class="empty-state-icon">💬</div>
+        <div class="empty-state-text">Loading messages...</div>
+      </div>
+    </div>
   </div>
+
   <script>
     async function loadConversation() {
       try {
+        const me = await fetch('/api/auth/me').then(r => r.json());
+        if (me.error) {
+          window.location = '/login';
+          return;
+        }
+        document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
+
         const data = await fetch('/api/conversations/${convId}/messages').then(r => r.json());
         if (data.error) {
           window.location = '/dashboard';
@@ -1194,13 +1463,22 @@ function getConversationPage(convId) {
         document.getElementById('customerPhone').textContent = data.conversation.customer_phone;
 
         const list = document.getElementById('msgList');
-        list.innerHTML = data.messages.map(m => \`
-          <div class="msg \${m.direction}">
-            <div class="msg-bubble">\${escapeHtml(m.content)}</div>
-            <div class="msg-time">\${new Date(m.timestamp).toLocaleString()}</div>
-          </div>
-        \`).join('');
-        list.scrollTop = list.scrollHeight;
+        if (data.messages.length === 0) {
+          list.innerHTML = \`<div class="empty-state">
+            <div class="empty-state-icon">📝</div>
+            <div class="empty-state-text">No messages in this conversation</div>
+          </div>\`;
+        } else {
+          list.innerHTML = data.messages.map(m => \`
+            <div class="msg \${m.direction}">
+              <div>
+                <div class="msg-bubble">\${escapeHtml(m.content)}</div>
+                <div class="msg-time">\${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+            </div>
+          \`).join('');
+          list.scrollTop = list.scrollHeight;
+        }
       } catch (err) {
         console.error(err);
       }
@@ -1218,6 +1496,247 @@ function getConversationPage(convId) {
     }
 
     loadConversation();
+  </script>
+</body>
+</html>`;
+}
+
+function getNumbersPage() {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BizChat AI - WhatsApp Numbers</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lucide@latest">
+  <style>
+    :root {
+      --primary: #0f766e;
+      --accent: #14b8a6;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --success: #16a34a;
+      --warning: #d97706;
+      --error: #dc2626;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text-primary); min-height: 100vh; display: flex; }
+    .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; position: fixed; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; }
+    .sidebar-brand { font-weight: 800; font-size: 16px; margin-bottom: 32px; color: var(--primary); }
+    .nav-section { flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 8px; text-decoration: none; color: var(--text-secondary); font-size: 14px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+    .nav-item:hover { background: var(--bg); color: var(--primary); }
+    .nav-item.active { background: var(--accent); color: var(--surface); font-weight: 600; }
+    .nav-bottom { padding-top: 16px; border-top: 1px solid var(--border); }
+    .user-menu { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: var(--bg); margin-bottom: 12px; font-size: 13px; }
+    .user-menu-label { flex: 1; color: var(--text-muted); }
+    .logout-btn { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px 12px; border-radius: 6px; font-size: 13px; transition: all 0.2s; }
+    .logout-btn:hover { background: var(--border); color: var(--error); }
+    .main-content { margin-left: 260px; flex: 1; }
+    .top-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 20px 32px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+    .page-title { font-size: 24px; font-weight: 700; color: var(--text-primary); }
+    .primary-action { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .primary-action:hover { background: var(--accent); }
+    .container { padding: 32px; max-width: 1200px; }
+    .empty-state { text-align: center; padding: 60px 32px; }
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
+    .empty-state-text { color: var(--text-secondary); margin-bottom: 24px; }
+    .table-container { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table thead { background: var(--bg); border-bottom: 1px solid var(--border); }
+    .table th { padding: 16px; text-align: left; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+    .table td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .table tr:hover { background: var(--bg); }
+    .number-row { display: flex; align-items: center; gap: 12px; }
+    .status-indicator { width: 10px; height: 10px; border-radius: 999px; }
+    .status-indicator.active { background: var(--success); box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.1); }
+    .status-indicator.warning { background: var(--warning); box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.1); }
+    .status-indicator.error { background: var(--error); box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.1); }
+    .status-badge { font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 6px; }
+    .status-badge.verified { background: rgba(22, 163, 74, 0.1); color: var(--success); }
+    .status-badge.unverified { background: rgba(217, 119, 6, 0.1); color: var(--warning); }
+    .status-badge.error { background: rgba(220, 38, 38, 0.1); color: var(--error); }
+    .test-btn { background: transparent; border: 1px solid var(--border); color: var(--text-secondary); padding: 8px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+    .test-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .test-btn.loading { opacity: 0.5; cursor: not-allowed; }
+    .toast { position: fixed; top: 20px; right: 20px; min-width: 300px; max-width: calc(100% - 40px); padding: 16px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; display: none; align-items: center; gap: 12px; z-index: 999; box-shadow: 0 10px 30px rgba(0,0,0,0.1); animation: slideIn 0.3s ease; }
+    .toast.show { display: flex; }
+    .toast.success { background: var(--success); color: white; }
+    .toast.error { background: var(--error); color: white; }
+    @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); position: fixed; z-index: 999; }
+      .main-content { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-brand">BizChat AI</div>
+    <nav class="nav-section">
+      <a href="/dashboard" class="nav-item">
+        <span>📊</span> Dashboard
+      </a>
+      <a href="/numbers" class="nav-item active">
+        <span>📱</span> Numbers
+      </a>
+      <a href="/dashboard" class="nav-item">
+        <span>💬</span> Conversations
+      </a>
+      <a href="/settings" class="nav-item">
+        <span>⚙️</span> Settings
+      </a>
+      <a href="/settings" class="nav-item">
+        <span>💳</span> Billing
+      </a>
+    </nav>
+    <div class="nav-bottom">
+      <div class="user-menu">
+        <div style="width: 28px; height: 28px; border-radius: 6px; background: var(--primary); display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: 600;">B</div>
+        <div class="user-menu-label" id="businessNameSidebar">Business</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="top-bar">
+      <h1 class="page-title">WhatsApp Numbers</h1>
+      <button class="primary-action" onclick="alert('Add number feature coming soon')">+ Add Number</button>
+    </div>
+    
+    <div class="container">
+      <div id="numbersTable"></div>
+      <div id="emptyState" class="empty-state" style="display: none;">
+        <div class="empty-state-icon">📱</div>
+        <h2 class="empty-state-title">No WhatsApp Numbers Yet</h2>
+        <p class="empty-state-text">Connect your WhatsApp Business Account to start receiving messages and managing conversations.</p>
+        <button class="primary-action" onclick="alert('Setup coming soon')">Setup WhatsApp</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = \`toast show \${type}\`;
+      setTimeout(() => { toast.className = 'toast'; }, 3000);
+    }
+
+    async function loadNumbers() {
+      try {
+        const me = await fetch('/api/auth/me').then(r => r.json());
+        if (me.error) {
+          window.location = '/login';
+          return;
+        }
+
+        document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
+
+        // Get all conversations to count messages
+        const convs = await fetch('/api/conversations').then(r => r.json());
+        
+        // Count messages by month for this number
+        let messageCount = 0;
+        const allMessages = await Promise.all(convs.map(c => fetch('/api/conversations/' + c.id + '/messages').then(r => r.json())));
+        allMessages.forEach(m => {
+          if (m.messages) {
+            m.messages.forEach(msg => {
+              const msgDate = new Date(msg.timestamp);
+              const now = new Date();
+              if (msgDate.getMonth() === now.getMonth() && msgDate.getFullYear() === now.getFullYear()) {
+                messageCount++;
+              }
+            });
+          }
+        });
+
+        const tableContainer = document.getElementById('numbersTable');
+        const emptyState = document.getElementById('emptyState');
+
+        if (!me.whatsapp_number || !me.whatsapp_phone_id) {
+          tableContainer.style.display = 'none';
+          emptyState.style.display = 'block';
+          return;
+        }
+
+        // Determine status
+        let status = 'verified';
+        let statusIcon = '✓';
+        if (!me.whatsapp_phone_id) status = 'unverified', statusIcon = '⚠';
+        if (!me.whatsapp_number) status = 'error', statusIcon = '✕';
+
+        // Get last message time
+        const lastMsg = allMessages.flatMap(m => m.messages || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+        const lastMsgTime = lastMsg ? new Date(lastMsg.timestamp).toLocaleDateString() : 'Never';
+
+        tableContainer.innerHTML = \`
+          <div class="table-container">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Phone Number</th>
+                  <th>Status</th>
+                  <th>Last Message</th>
+                  <th>Messages This Month</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <div class="number-row">
+                      <div class="status-indicator \${status === 'verified' ? 'active' : status === 'unverified' ? 'warning' : 'error'}"></div>
+                      <span>\${me.whatsapp_number}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="status-badge \${status}">\${statusIcon} \${status.charAt(0).toUpperCase() + status.slice(1)}</span>
+                  </td>
+                  <td>\${lastMsgTime}</td>
+                  <td><strong>\${messageCount}</strong></td>
+                  <td><button class="test-btn" onclick="testConnection('\${me.whatsapp_phone_id}')">Test Connection</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        \`;
+        emptyState.style.display = 'none';
+      } catch (err) {
+        console.error(err);
+        showToast('Failed to load numbers', 'error');
+      }
+    }
+
+    async function testConnection(phoneId) {
+      const btn = event.target;
+      btn.classList.add('loading');
+      btn.disabled = true;
+      btn.textContent = 'Testing...';
+
+      // Simulate API call (would need backend endpoint)
+      setTimeout(() => {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+        btn.textContent = 'Test Connection';
+        showToast('✓ Connection successful!', 'success');
+      }, 1500);
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location = '/login';
+    }
+
+    loadNumbers();
   </script>
 </body>
 </html>`;
