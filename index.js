@@ -882,7 +882,7 @@ function getDashboardPage() {
         const currentYear = now.getFullYear();
         
         for (const conv of convs) {
-            const messagesRes = await fetch(`/api/conversations/${conv.id}/messages`);
+            const messagesRes = await fetch('/api/conversations/' + conv.id + '/messages');
             const { messages } = await messagesRes.json();
             if(messages) {
                 messages.forEach(msg => {
