@@ -908,15 +908,15 @@ function getDashboardPage() {
 
         // Render setup checklist
         const setupList = document.getElementById('setupList');
-        setupList.innerHTML = setupItems.map(item => `
-          <div class="setup-item" onclick="window.location='/settings'">
-            <div class="setup-check ${me[item.key] && me[item.key] !== '' ? 'done' : ''}">${me[item.key] && me[item.key] !== '' ? '✓' : '✕'}</div>
-            <div class="setup-label">
-              <div class="setup-label-title">${item.label}</div>
-              <div class="setup-label-hint">${item.hint}</div>
-            </div>
-          </div>
-        `).join('');
+        setupList.innerHTML = setupItems.map(item =>
+          '<div class="setup-item" onclick="window.location=\\'/settings\\'">' +
+            '<div class="setup-check ' + (me[item.key] && me[item.key] !== '' ? 'done' : '') + '">' + (me[item.key] && me[item.key] !== '' ? '✓' : '✕') + '</div>' +
+            '<div class="setup-label">' +
+              '<div class="setup-label-title">' + item.label + '</div>' +
+              '<div class="setup-label-hint">' + item.hint + '</div>' +
+            '</div>' +
+          '</div>'
+        ).join('');
 
         // Build activity feed
         const activities = [];
@@ -932,7 +932,7 @@ function getDashboardPage() {
         if(lastConv) {
              activities.push({
                 icon: '💬',
-                title: `New conversation with ${lastConv.customer_name || lastConv.customer_phone}`,
+                title: 'New conversation with ' + (lastConv.customer_name || lastConv.customer_phone),
                 time: new Date(lastConv.created_at).toLocaleDateString()
             });
         }
@@ -940,20 +940,21 @@ function getDashboardPage() {
 
         const activityList = document.getElementById('activityList');
         if (activities.length === 0) {
-          activityList.innerHTML = `<div class="empty-state">
-            <div class="empty-state-icon">📝</div>
-            <div class="empty-state-text">Complete setup to get started</div>
-          </div>`;
+          activityList.innerHTML =
+            '<div class="empty-state">' +
+              '<div class="empty-state-icon">📝</div>' +
+              '<div class="empty-state-text">Complete setup to get started</div>' +
+            '</div>';
         } else {
-          activityList.innerHTML = activities.map(a => `
-            <div class="activity-item">
-              <div class="activity-icon">${a.icon}</div>
-              <div class="activity-content">
-                <div class="activity-title">${a.title}</div>
-                <div class="activity-time">${a.time}</div>
-              </div>
-            </div>
-          `).join('');
+          activityList.innerHTML = activities.map(a =>
+            '<div class="activity-item">' +
+              '<div class="activity-icon">' + a.icon + '</div>' +
+              '<div class="activity-content">' +
+                '<div class="activity-title">' + a.title + '</div>' +
+                '<div class="activity-time">' + a.time + '</div>' +
+              '</div>' +
+            '</div>'
+          ).join('');
         }
 
         // Update WhatsApp status
@@ -1190,7 +1191,7 @@ function getSettingsPage() {
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
       toast.textContent = message;
-      toast.className = `toast show ${type}`;
+      toast.className = 'toast show ' + type;
       setTimeout(() => { toast.className = 'toast'; }, 3500);
     }
 
@@ -1423,7 +1424,7 @@ function getConversationPage(convId) {
         const me = await meRes.json();
         document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
 
-        const dataRes = await fetch(`/api/conversations/${convId}/messages`);
+        const dataRes = await fetch('/api/conversations/' + convId + '/messages');
         if (!dataRes.ok) {
             window.location = '/dashboard';
             return;
@@ -1435,19 +1436,20 @@ function getConversationPage(convId) {
 
         const list = document.getElementById('msgList');
         if (data.messages.length === 0) {
-          list.innerHTML = `<div class="empty-state">
-            <div class="empty-state-icon">📝</div>
-            <div class="empty-state-text">No messages in this conversation</div>
-          </div>`;
+          list.innerHTML =
+            '<div class="empty-state">' +
+              '<div class="empty-state-icon">📝</div>' +
+              '<div class="empty-state-text">No messages in this conversation</div>' +
+            '</div>';
         } else {
-          list.innerHTML = data.messages.map(m => `
-            <div class="msg ${m.direction}">
-              <div>
-                <div class="msg-bubble">${escapeHtml(m.content)}</div>
-                <div class="msg-time">${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-              </div>
-            </div>
-          `).join('');
+          list.innerHTML = data.messages.map(m =>
+            '<div class="msg ' + m.direction + '">' +
+              '<div>' +
+                '<div class="msg-bubble">' + escapeHtml(m.content) + '</div>' +
+                '<div class="msg-time">' + new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</div>' +
+              '</div>' +
+            '</div>'
+          ).join('');
           list.scrollTop = list.scrollHeight;
         }
       } catch (err) {
@@ -1599,7 +1601,7 @@ function getNumbersPage() {
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
       toast.textContent = message;
-      toast.className = `toast show ${type}`;
+      toast.className = 'toast show ' + type;
       setTimeout(() => { toast.className = 'toast'; }, 3000);
     }
 
@@ -1652,37 +1654,36 @@ function getNumbersPage() {
             statusIcon = '✓';
         }
 
-        tableContainer.innerHTML = `
-          <div class="table-container">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Phone Number</th>
-                  <th>Status</th>
-                  <th>Last Message</th>
-                  <th>Messages This Month</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>
-                    <div class="number-row">
-                      <div class="status-indicator ${status === 'verified' ? 'active' : 'error'}"></div>
-                      <span>${me.whatsapp_number}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span class="status-badge ${status}">${statusIcon} ${status.charAt(0).toUpperCase() + status.slice(1)}</span>
-                  </td>
-                  <td>${lastMessageTime}</td>
-                  <td><strong>${messageCount}</strong></td>
-                  <td><button class="test-btn" onclick="testConnection('${me.whatsapp_phone_id}')">Test Connection</button></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        `;
+        tableContainer.innerHTML =
+          '<div class="table-container">' +
+            '<table class="table">' +
+              '<thead>' +
+                '<tr>' +
+                  '<th>Phone Number</th>' +
+                  '<th>Status</th>' +
+                  '<th>Last Message</th>' +
+                  '<th>Messages This Month</th>' +
+                  '<th>Action</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' +
+                '<tr>' +
+                  '<td>' +
+                    '<div class="number-row">' +
+                      '<div class="status-indicator ' + (status === 'verified' ? 'active' : 'error') + '"></div>' +
+                      '<span>' + me.whatsapp_number + '</span>' +
+                    '</div>' +
+                  '</td>' +
+                  '<td>' +
+                    '<span class="status-badge ' + status + '">' + statusIcon + ' ' + status.charAt(0).toUpperCase() + status.slice(1) + '</span>' +
+                  '</td>' +
+                  '<td>' + lastMessageTime + '</td>' +
+                  '<td><strong>' + messageCount + '</strong></td>' +
+                  '<td><button class="test-btn" onclick="testConnection(\\'' + me.whatsapp_phone_id + '\\')">Test Connection</button></td>' +
+                '</tr>' +
+              '</tbody>' +
+            '</table>' +
+          '</div>';
         emptyState.style.display = 'none';
       } catch (err) {
         console.error(err);
