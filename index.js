@@ -1,11 +1,19 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
-const path = require('path');
 const { pool, createTables } = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
+
+if (isProduction && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)) {
+  throw new Error('SESSION_SECRET must be set to at least 32 characters in production.');
+}
+
+if (isProduction) {
+  app.set('trust proxy', 1);
+}
 
 async function getBusinessByWhatsAppPhoneId(phoneId) {
   const { rows } = await pool.query('SELECT * FROM businesses WHERE whatsapp_phone_id = $1', [phoneId]);
@@ -105,7 +113,12 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'bizchat-secret-change-in-production',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 }
+  cookie: {
+    secure: isProduction,
+    sameSite: 'lax',
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  }
 }));
 
 // OpenRouter AI setup
@@ -199,8 +212,6 @@ async function handleWhatsAppMessage(msg, value) {
 
 async function generateAIResponse(business, customerMessage) {
   const businessRecord = await getBusinessById(business.id) || business;
-  console.log('generateAIResponse: businessRecord loaded', businessRecord);
-  console.log('generateAIResponse: customerMessage=', customerMessage);
 
   const systemPrompt = `You are a helpful AI assistant for "${businessRecord.shop_name || 'the business'}", a business in Pakistan.
 
@@ -277,7 +288,9 @@ async function sendWhatsAppMessage(whatsappNumber, phoneId, to, text) {
     );
 
     const data = await response.json();
-    console.log('WhatsApp send result:', data);
+    if (!response.ok) {
+      console.error('WhatsApp send failed:', data);
+    }
   } catch (error) {
     console.error('WhatsApp send error:', error);
   }
@@ -346,7 +359,6 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/me', requireAuth, async (req, res) => {
   const business = sanitizeBusiness(await getBusinessById(req.session.businessId));
-  console.log('GET /api/auth/me business loaded for id', req.session.businessId, business);
   res.json(business);
 });
 
@@ -367,13 +379,6 @@ app.put('/api/business', requireAuth, async (req, res) => {
     shop_name, description, services, prices, timings,
     faqs, whatsapp_number, whatsapp_phone_id, payment_link
   } = req.body;
-
-  const incoming = {
-    shop_name, description, services, prices, timings,
-    faqs, whatsapp_number, whatsapp_phone_id, payment_link
-  };
-  console.log('PUT /api/business session businessId:', req.session.businessId);
-  console.log('PUT /api/business incoming data:', incoming);
 
   const updates = {};
   [
@@ -398,7 +403,6 @@ app.put('/api/business', requireAuth, async (req, res) => {
     }
 
     const safeBusiness = sanitizeBusiness(updatedBusiness);
-    console.log('Updated business record:', safeBusiness);
     res.json({ success: true, business: safeBusiness });
   } catch (error) {
     console.error('Update error:', error);
@@ -1197,14 +1201,12 @@ function getSettingsPage() {
 
     async function loadSettings() {
       try {
-        console.log('loadSettings: fetching /api/auth/me');
         const res = await fetch('/api/auth/me');
         if (!res.ok) {
             window.location = '/login';
             return;
         }
         const data = await res.json();
-        console.log('loadSettings: received', data);
         
         document.getElementById('businessNameSidebar').textContent = data.shop_name || 'Business';
         document.getElementById('shop_name').value = data.shop_name || '';
@@ -1222,7 +1224,6 @@ function getSettingsPage() {
     }
 
     async function saveForm(formId, formData) {
-      console.log('saveForm:', formId, formData);
       const form = document.getElementById(formId);
       const btn = form.querySelector('.save-btn');
       
@@ -1671,7 +1672,7 @@ function getNumbersPage() {
                   '<td>' +
                     '<div class="number-row">' +
                       '<div class="status-indicator ' + (status === 'verified' ? 'active' : 'error') + '"></div>' +
-                      '<span>' + me.whatsapp_number + '</span>' +
+                      '<span>' + escapeHtml(me.whatsapp_number) + '</span>' +
                     '</div>' +
                   '</td>' +
                   '<td>' +
@@ -1679,7 +1680,7 @@ function getNumbersPage() {
                   '</td>' +
                   '<td>' + lastMessageTime + '</td>' +
                   '<td><strong>' + messageCount + '</strong></td>' +
-                  '<td><button class="test-btn" onclick="testConnection(\\'' + me.whatsapp_phone_id + '\\')">Test Connection</button></td>' +
+                  '<td><button class="test-btn" onclick="testConnection(this, \\'' + escapeAttribute(me.whatsapp_phone_id) + '\\')">Test Connection</button></td>' +
                 '</tr>' +
               '</tbody>' +
             '</table>' +
@@ -1691,8 +1692,11 @@ function getNumbersPage() {
       }
     }
 
-    async function testConnection(phoneId) {
-      const btn = event.target;
+    function escapeAttribute(text) {
+      return escapeHtml(text).replace(/'/g, '&#39;');
+    }
+
+    async function testConnection(btn, phoneId) {
       btn.classList.add('loading');
       btn.disabled = true;
       btn.textContent = 'Testing...';

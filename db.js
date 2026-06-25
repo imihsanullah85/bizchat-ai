@@ -1,11 +1,17 @@
 
 const { Pool } = require('pg');
 
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL is required. Set it to your PostgreSQL connection string before starting the app.');
+}
+
+const sslConfig = process.env.DATABASE_SSL === 'false'
+  ? false
+  : { rejectUnauthorized: false };
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ssl: sslConfig
 });
 
 async function createTables() {
@@ -53,6 +59,7 @@ async function createTables() {
     console.log('Tables created successfully (if they did not exist).');
   } catch (err) {
     console.error('Error creating tables:', err);
+    throw err;
   } finally {
     client.release();
   }

@@ -16,8 +16,11 @@ Copy `.env.example` to `.env` and fill in your credentials:
 
 ```bash
 OPENROUTER_API_KEY=your_key_here
+DATABASE_URL=postgres://user:password@host:5432/database
+DATABASE_SSL=true
 WHATSAPP_TOKEN=your_meta_token
 VERIFY_TOKEN=your_webhook_verify_token
+SESSION_SECRET=change_this_to_a_random_32_plus_character_string
 ```
 
 ### 3. Run the Server
@@ -43,4 +46,14 @@ npm start
 
 ## Deployment
 
-Works on Railway, Render, or any Node.js hosting.
+Works on Railway, Render, or any Node.js hosting with Node.js 18+ and PostgreSQL.
+
+Required deployment variables:
+
+- `DATABASE_URL`: PostgreSQL connection string.
+- `SESSION_SECRET`: random 32+ character value.
+- `OPENROUTER_API_KEY`: OpenRouter API key for AI replies.
+- `WHATSAPP_TOKEN`: Meta WhatsApp token.
+- `VERIFY_TOKEN`: webhook verification token.
+
+Set `DATABASE_SSL=false` only if your PostgreSQL provider requires plain connections.
