@@ -45,6 +45,7 @@ async function createTables() {
         lead_temperature VARCHAR(20) DEFAULT 'cold',
         follow_up_at TIMESTAMP WITH TIME ZONE,
         last_customer_reply_at TIMESTAMP WITH TIME ZONE,
+        needs_human BOOLEAN DEFAULT false,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (business_id, customer_phone)
       );
@@ -54,6 +55,7 @@ async function createTables() {
     await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS lead_temperature VARCHAR(20) DEFAULT 'cold';`);
     await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS follow_up_at TIMESTAMP WITH TIME ZONE;`);
     await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS last_customer_reply_at TIMESTAMP WITH TIME ZONE;`);
+    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS needs_human BOOLEAN DEFAULT false;`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS messages (

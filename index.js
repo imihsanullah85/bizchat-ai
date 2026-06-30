@@ -71,9 +71,9 @@ async function ensureConversation(businessId, customerPhone, customerName) {
 }
 
 // Update specific meta columns on a conversation using safe parameterized placeholders.
-// Accepts an object with any subset of: lead_temperature, follow_up_at, last_customer_reply_at.
+// Accepts an object with any subset of: lead_temperature, follow_up_at, last_customer_reply_at, needs_human.
 async function updateConversationMeta(conversationId, updates) {
-  const allowed = ['lead_temperature', 'follow_up_at', 'last_customer_reply_at'];
+  const allowed = ['lead_temperature', 'follow_up_at', 'last_customer_reply_at', 'needs_human'];
   const parts = [];
   const vals = [];
   for (const key of allowed) {
@@ -352,6 +352,7 @@ async function runFollowUpScheduler() {
       + '     AND c.follow_up_at <= $1'
       + '     AND (c.last_customer_reply_at IS NULL OR c.last_customer_reply_at < c.follow_up_at)'
       + '     AND (c.last_customer_reply_at IS NULL OR c.last_customer_reply_at > $2)'
+      + '     AND COALESCE(c.needs_human, false) = false'
       + '   FOR UPDATE SKIP LOCKED'
       + ' )'
       + ' RETURNING id, business_id, customer_phone',
@@ -481,6 +482,18 @@ app.get('/api/conversations/:id/messages', requireAuth, async (req, res) => {
   if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
   const messages = await getMessagesForConversation(req.params.id);
   res.json({ conversation, messages });
+});
+
+// Hand a conversation to a human: pauses AI follow-ups for that conversation.
+app.put('/api/conversations/:id/handoff', requireAuth, async (req, res) => {
+  const conversation = await getConversationByIdAndBusiness(req.params.id, req.session.businessId);
+  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const needsHuman = req.body.needs_human === true;
+  try {
+    const updates = needsHuman ? { needs_human: true, follow_up_at: null } : { needs_human: false };
+    await updateConversationMeta(req.params.id, updates);
+    res.json({ success: true, needs_human: needsHuman });
+  } catch (error) { console.error('Handoff update error:', error); res.status(500).json({ error: 'Update failed' }); }
 });
 
 // ============================================
@@ -1040,6 +1053,9 @@ function getConversationsListPage() {
     .conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
     .conv-time { font-size: 11px; color: var(--text-light); }
     .unread-badge { background: var(--accent); color: white; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 12px; }
+    .conv-lead { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+    .conv-lead.hot { background: rgba(220,38,38,0.12); color: #dc2626; }
+    .conv-lead.warm { background: rgba(249,115,22,0.12); color: #ea6a00; }
     .conv-main { flex: 1; background: var(--bg); display: flex; flex-direction: column; }
     .conv-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); }
     .conv-empty svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
@@ -1082,11 +1098,15 @@ function getConversationsListPage() {
         } else {
           convList.innerHTML = convs.map(conv => {
             const initial = (conv.customer_name || conv.customer_phone || 'C').charAt(0).toUpperCase();
+            const temp = conv.lead_temperature;
+            let leadHtml = '';
+            if (temp === 'hot') leadHtml = '<span class="conv-lead hot">\uD83D\uDD25 Hot</span>';
+            else if (temp === 'warm') leadHtml = '<span class="conv-lead warm">Warm</span>';
             return '<div class="conv-item" onclick="window.location=\'/conversations/' + conv.id + '\'">'
               + '<div class="conv-avatar">' + initial + '</div>'
               + '<div class="conv-info"><div class="conv-name">' + escapeHtml(conv.customer_name || conv.customer_phone) + '</div>'
               + '<div class="conv-preview">' + escapeHtml(conv.last_message || 'No messages') + '</div></div>'
-              + '<div class="conv-meta"><div class="conv-time">' + getTimeAgo(conv.last_message_time) + '</div></div></div>';
+              + '<div class="conv-meta"><div class="conv-time">' + getTimeAgo(conv.last_message_time) + '</div>' + leadHtml + '</div></div>';
           }).join('');
         }
         lucide.createIcons();
@@ -1116,7 +1136,12 @@ function getConversationPage(convId) {
     .back-btn:hover { background: var(--border); }
     .chat-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-weight: 600; font-size: 14px; }
     .chat-info { flex: 1; }
+    .chat-name-row { display: flex; align-items: center; gap: 8px; }
     .chat-name { font-weight: 600; font-size: 15px; color: var(--text-primary); }
+    .lead-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 8px; border-radius: 999px; }
+    .lead-badge.hot { background: rgba(220,38,38,0.12); color: #dc2626; }
+    .lead-badge.warm { background: rgba(249,115,22,0.12); color: #ea6a00; }
+    .action-btn.active { background: var(--accent); color: #fff; }
     .chat-status { font-size: 12px; color: var(--success); display: flex; align-items: center; gap: 4px; }
     .chat-status svg { width: 12px; height: 12px; }
     .chat-actions { display: flex; gap: 8px; }
@@ -1147,11 +1172,11 @@ function getConversationPage(convId) {
         <button class="back-btn" onclick="window.location='/conversations'"><i data-lucide="arrow-left" style="width:18px;height:18px"></i></button>
         <div class="chat-avatar" id="chatAvatar">C</div>
         <div class="chat-info">
-          <div class="chat-name" id="customerName">Loading...</div>
+          <div class="chat-name-row"><div class="chat-name" id="customerName">Loading...</div><span id="leadBadge" class="lead-badge" style="display:none;"></span></div>
           <div class="chat-status" id="customerPhone"><i data-lucide="phone"></i><span id="phoneNumber"></span></div>
         </div>
         <div class="chat-actions">
-          <button class="action-btn" title="Handoff"><i data-lucide="user-plus" style="width:18px;height:18px"></i></button>
+          <button class="action-btn" id="handoffBtn" title="Take over from AI" onclick="toggleHandoff()"><i data-lucide="user-plus" style="width:18px;height:18px"></i></button>
         </div>
       </div>
       <div class="messages-container" id="msgList"></div>
@@ -1174,6 +1199,9 @@ function getConversationPage(convId) {
         document.getElementById('customerName').textContent = name;
         document.getElementById('chatAvatar').textContent = name.charAt(0).toUpperCase();
         document.getElementById('phoneNumber').textContent = data.conversation.customer_phone;
+        renderLeadBadge(data.conversation.lead_temperature);
+        needsHuman = data.conversation.needs_human === true;
+        renderHandoff();
         lucide.createIcons();
         const list = document.getElementById('msgList');
         if (data.messages.length === 0) {
@@ -1203,6 +1231,26 @@ function getConversationPage(convId) {
           list.scrollTop = list.scrollHeight;
         }
         lucide.createIcons();
+      } catch (err) { console.error(err); }
+    }
+    let needsHuman = false;
+    function renderLeadBadge(temp) {
+      const badge = document.getElementById('leadBadge');
+      const t = ['hot', 'warm'].includes(temp) ? temp : null;
+      if (!t) { badge.style.display = 'none'; return; }
+      badge.style.display = 'inline-block';
+      badge.className = 'lead-badge ' + t;
+      badge.textContent = t === 'hot' ? '\uD83D\uDD25 Hot lead' : 'Warm lead';
+    }
+    function renderHandoff() {
+      const btn = document.getElementById('handoffBtn');
+      btn.classList.toggle('active', needsHuman);
+      btn.title = needsHuman ? 'Human handling on \u2014 AI follow-ups paused (click to hand back to AI)' : 'Take over from AI';
+    }
+    async function toggleHandoff() {
+      try {
+        const res = await fetch('/api/conversations/' + convId + '/handoff', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ needs_human: !needsHuman }) });
+        if (res.ok) { needsHuman = !needsHuman; renderHandoff(); }
       } catch (err) { console.error(err); }
     }
     function escapeHtml(text) { if (typeof text !== 'string') return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
