@@ -99,6 +99,44 @@ async function getMessagesForConversation(conversationId) {
   return rows;
 }
 
+async function updateConversationFields(conversationId, updates) {
+  const keys = Object.keys(updates);
+  if (!keys.length) return null;
+  const setString = keys.map((key, i) => `"${key}" = $${i + 2}`).join(', ');
+  const values = [conversationId, ...Object.values(updates)];
+  const { rows } = await pool.query(`UPDATE conversations SET ${setString} WHERE id = $1 RETURNING *`, values);
+  return rows[0];
+}
+
+async function clearFollowUp(conversationId) {
+  await pool.query('UPDATE conversations SET follow_up_at = NULL WHERE id = $1', [conversationId]);
+}
+
+async function insertOrder({ businessId, conversationId, customerPhone, orderDetails, requestedDatetime }) {
+  const { rows } = await pool.query(
+    'INSERT INTO orders (business_id, conversation_id, customer_phone, order_details, requested_datetime, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [businessId, conversationId, customerPhone, orderDetails, requestedDatetime || null, 'new']
+  );
+  return rows[0];
+}
+
+// Returns conversations whose follow-up is due, joined with the business send
+// credentials and the latest message so the checker can decide whether to send.
+async function getDueFollowUps() {
+  const { rows } = await pool.query(`
+    SELECT c.id, c.business_id, c.customer_phone, c.follow_up_at,
+      b.whatsapp_number, b.whatsapp_phone_id,
+      (SELECT direction FROM messages WHERE conversation_id = c.id ORDER BY timestamp DESC LIMIT 1) AS last_direction,
+      (SELECT timestamp FROM messages WHERE conversation_id = c.id ORDER BY timestamp DESC LIMIT 1) AS last_message_time
+    FROM conversations c
+    JOIN businesses b ON b.id = c.business_id
+    WHERE c.follow_up_at IS NOT NULL
+      AND c.follow_up_at <= NOW()
+      AND COALESCE(c.needs_human, false) = false
+  `);
+  return rows;
+}
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -148,6 +186,8 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+const FALLBACK_REPLY = 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.';
+
 async function handleWhatsAppMessage(msg, value) {
   const customerPhone = msg.from;
   const businessPhoneId = value.metadata?.phone_number_id;
@@ -160,14 +200,70 @@ async function handleWhatsAppMessage(msg, value) {
 
   const conversation = await ensureConversation(business.id, customerPhone, customerName);
   await insertMessage(conversation.id, 'in', messageText);
-  const aiResponse = await generateAIResponse(business, messageText);
-  await insertMessage(conversation.id, 'out', aiResponse);
-  await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, aiResponse);
+  // A new inbound message means the customer has replied, so any pending
+  // follow-up is no longer relevant and should be cleared before we re-evaluate.
+  await clearFollowUp(conversation.id);
+
+  const ai = await generateAIResponse(business, messageText);
+
+  await insertMessage(conversation.id, 'out', ai.customerReply);
+  await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, ai.customerReply);
+
+  // A. Order/booking detection -> persist a structured order row.
+  if (ai.orderDetected && ai.orderDetected.order_details) {
+    try {
+      await insertOrder({
+        businessId: business.id,
+        conversationId: conversation.id,
+        customerPhone,
+        orderDetails: ai.orderDetected.order_details,
+        requestedDatetime: parseDate(ai.orderDetected.requested_datetime)
+      });
+    } catch (err) { console.error('Order insert error:', err); }
+  }
+
+  // B. Hot lead detection -> store the AI's read of buying intent.
+  if (ai.leadTemperature) {
+    await updateConversationFields(conversation.id, { lead_temperature: ai.leadTemperature }).catch(err => console.error('Lead update error:', err));
+  }
+
+  // C. Follow-up scheduling -> if unresolved, check back in 2 hours.
+  if (ai.needsFollowup && !conversation.needs_human) {
+    const followUpAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    await updateConversationFields(conversation.id, { follow_up_at: followUpAt }).catch(err => console.error('Follow-up schedule error:', err));
+  }
+}
+
+// Returns an ISO Date for a parseable value, otherwise null (so fuzzy phrases
+// like "Friday afternoon" don't break the timestamp column).
+function parseDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function safeParseAIJson(raw) {
+  if (!raw) return null;
+  let text = String(raw).trim();
+  // Models sometimes wrap JSON in ```json ... ``` fences.
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) text = fenced[1].trim();
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    // Fall back to the first {...} block if there is surrounding prose.
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      try { return JSON.parse(text.slice(start, end + 1)); } catch (_) { /* ignore */ }
+    }
+    return null;
+  }
 }
 
 async function generateAIResponse(business, customerMessage) {
   const businessRecord = await getBusinessById(business.id) || business;
-  const systemPrompt = `You are a helpful AI assistant for "${businessRecord.shop_name || 'the business'}", a business in Pakistan.
+  const systemPrompt = `You are an AI sales assistant for "${businessRecord.shop_name || 'the business'}", a business in Pakistan. You do not just answer questions - you actively help close sales and capture orders.
 
 BUSINESS INFORMATION:
 - Shop Name: ${businessRecord.shop_name || 'N/A'}
@@ -177,25 +273,57 @@ BUSINESS INFORMATION:
 - Working Hours: ${businessRecord.timings || 'N/A'}
 - FAQs: ${businessRecord.faqs || 'N/A'}
 
-INSTRUCTIONS:
-- Respond in a friendly, helpful manner
-- Keep responses concise (under 200 words)
-- If asked about prices, services, or timings, use the business info provided
-- If you don't know something specific, suggest the customer contact the shop directly
-- Be polite and use Pakistani English expressions naturally`;
+Reply in a friendly, helpful, concise manner (under 150 words). Use the business info above for prices, services and timings. If you don't know something specific, suggest the customer contact the shop directly. Use Pakistani English expressions naturally.
+
+You MUST respond with ONLY a valid JSON object (no markdown, no code fences, no extra text) with EXACTLY these fields:
+{
+  "customer_reply": "the natural WhatsApp message to send to the customer",
+  "order_detected": null OR { "order_details": "short summary of what the customer wants, including quantity/size/variant", "requested_datetime": "ISO 8601 datetime string if a specific date/time was requested, otherwise null" },
+  "lead_temperature": "cold" | "warm" | "hot",
+  "needs_followup": true OR false
+}
+
+Field rules:
+- order_detected: set to an object ONLY when the customer shows clear buying intent (e.g. "I want to order X", "book an appointment for Friday", "do you have size M", "I'll take 2"). Otherwise null. Put the human-readable timing (e.g. "Friday afternoon") inside order_details as well.
+- lead_temperature: "hot" if strong buying signals (asks price, location, how to pay, urgent availability, or is placing an order); "warm" if mildly interested or comparing; "cold" for greetings, vague or unrelated messages.
+- needs_followup: true if the conversation seems unresolved and might end without a clear next step (so a friendly check-in later would help); false if the customer's need is fully resolved or they confirmed an order/appointment.`;
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'openrouter/free', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: customerMessage }] })
+      body: JSON.stringify({
+        model: 'openrouter/free',
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: customerMessage }]
+      })
     });
     const data = await response.json();
-    if (data.error) { console.error('OpenRouter error:', data.error); return 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.'; }
-    return data.choices?.[0]?.message?.content || 'Sorry, I am having trouble responding right now.';
+    if (data.error) { console.error('OpenRouter error:', data.error); return { customerReply: FALLBACK_REPLY, orderDetected: null, leadTemperature: null, needsFollowup: false }; }
+
+    const content = data.choices?.[0]?.message?.content || '';
+    const parsed = safeParseAIJson(content);
+
+    if (!parsed || typeof parsed.customer_reply !== 'string' || !parsed.customer_reply.trim()) {
+      // Could not get structured output - degrade gracefully to a plain reply.
+      return { customerReply: (content && content.trim()) || FALLBACK_REPLY, orderDetected: null, leadTemperature: null, needsFollowup: false };
+    }
+
+    const validTemps = ['cold', 'warm', 'hot'];
+    const leadTemperature = validTemps.includes(parsed.lead_temperature) ? parsed.lead_temperature : 'cold';
+    const orderDetected = parsed.order_detected && typeof parsed.order_detected === 'object' && parsed.order_detected.order_details
+      ? parsed.order_detected
+      : null;
+
+    return {
+      customerReply: parsed.customer_reply.trim(),
+      orderDetected,
+      leadTemperature,
+      needsFollowup: parsed.needs_followup === true
+    };
   } catch (error) {
     console.error('OpenRouter fetch error:', error);
-    return 'Sorry, I am having trouble responding right now.';
+    return { customerReply: 'Sorry, I am having trouble responding right now.', orderDetected: null, leadTemperature: null, needsFollowup: false };
   }
 }
 
@@ -209,6 +337,39 @@ async function sendWhatsAppMessage(whatsappNumber, phoneId, to, text) {
       body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text', text: { body: text } })
     });
   } catch (error) { console.error('WhatsApp send error:', error); }
+}
+
+// ============================================
+// FOLLOW-UP SCHEDULER
+// ============================================
+
+const FOLLOW_UP_MESSAGE = 'Hi! Just checking — were you able to find what you were looking for? Happy to help if you have more questions 😊';
+const FOLLOW_UP_INTERVAL_MS = Number(process.env.FOLLOW_UP_INTERVAL_MS) || 10 * 60 * 1000; // every 10 minutes
+const WHATSAPP_SESSION_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h messaging window
+
+async function processFollowUps() {
+  try {
+    const due = await getDueFollowUps();
+    for (const conv of due) {
+      // Customer already replied after our last message -> nothing to chase.
+      if (conv.last_direction !== 'out') { await clearFollowUp(conv.id); continue; }
+
+      // Outside the 24h WhatsApp window a plain text send would fail/violate
+      // policy, so skip (and clear) rather than risk it.
+      const lastTime = conv.last_message_time ? new Date(conv.last_message_time).getTime() : 0;
+      if (!lastTime || (Date.now() - lastTime) > WHATSAPP_SESSION_WINDOW_MS) { await clearFollowUp(conv.id); continue; }
+
+      await sendWhatsAppMessage(conv.whatsapp_number, conv.whatsapp_phone_id, conv.customer_phone, FOLLOW_UP_MESSAGE);
+      await insertMessage(conv.id, 'out', FOLLOW_UP_MESSAGE);
+      await clearFollowUp(conv.id);
+    }
+  } catch (error) {
+    console.error('Follow-up processing error:', error);
+  }
+}
+
+function startFollowUpScheduler() {
+  setInterval(() => { processFollowUps(); }, FOLLOW_UP_INTERVAL_MS);
 }
 
 // ============================================
@@ -284,6 +445,19 @@ app.get('/api/conversations/:id/messages', requireAuth, async (req, res) => {
   if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
   const messages = await getMessagesForConversation(req.params.id);
   res.json({ conversation, messages });
+});
+
+// Toggle human handling. While flagged, the AI follow-up scheduler skips this
+// conversation and any pending follow-up is cleared.
+app.put('/api/conversations/:id/handoff', requireAuth, async (req, res) => {
+  const conversation = await getConversationByIdAndBusiness(req.params.id, req.session.businessId);
+  if (!conversation) return res.status(404).json({ error: 'Conversation not found' });
+  const needsHuman = req.body.needs_human === true;
+  try {
+    const updates = needsHuman ? { needs_human: true, follow_up_at: null } : { needs_human: false };
+    const updated = await updateConversationFields(req.params.id, updates);
+    res.json({ success: true, conversation: updated });
+  } catch (error) { console.error('Handoff update error:', error); res.status(500).json({ error: 'Update failed' }); }
 });
 
 // ============================================
@@ -846,6 +1020,9 @@ function getConversationsListPage() {
     .conv-preview { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
     .conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
     .conv-time { font-size: 11px; color: var(--text-light); }
+    .conv-lead { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+    .conv-lead.hot { background: rgba(220,38,38,0.12); color: var(--error); }
+    .conv-lead.warm { background: rgba(249,115,22,0.12); color: var(--accent-orange); }
     .unread-badge { background: var(--accent); color: white; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 12px; }
     .conv-main { flex: 1; background: var(--bg); display: flex; flex-direction: column; }
     .conv-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); }
@@ -889,11 +1066,15 @@ function getConversationsListPage() {
         } else {
           convList.innerHTML = convs.map(conv => {
             const initial = (conv.customer_name || conv.customer_phone || 'C').charAt(0).toUpperCase();
+            const temp = conv.lead_temperature;
+            let leadHtml = '';
+            if (temp === 'hot') leadHtml = '<span class="conv-lead hot">🔥 Hot</span>';
+            else if (temp === 'warm') leadHtml = '<span class="conv-lead warm">Warm</span>';
             return '<div class="conv-item" onclick="window.location=\\'/conversations/' + conv.id + '\\'">' +
               '<div class="conv-avatar">' + initial + '</div>' +
               '<div class="conv-info"><div class="conv-name">' + escapeHtml(conv.customer_name || conv.customer_phone) + '</div>' +
               '<div class="conv-preview">' + escapeHtml(conv.last_message || 'No messages') + '</div></div>' +
-              '<div class="conv-meta"><div class="conv-time">' + getTimeAgo(conv.last_message_time) + '</div></div></div>';
+              '<div class="conv-meta"><div class="conv-time">' + getTimeAgo(conv.last_message_time) + '</div>' + leadHtml + '</div></div>';
           }).join('');
         }
         lucide.createIcons();
@@ -943,6 +1124,12 @@ function getConversationPage(convId) {
     .msg-time { font-size: 10px; color: var(--text-light); }
     .msg-status svg { width: 14px; height: 14px; color: #34b7f1; }
     .ai-badge { background: var(--accent-blue); color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; display: inline-block; }
+    .chat-name-row { display: flex; align-items: center; gap: 8px; }
+    .lead-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 8px; border-radius: 999px; }
+    .lead-badge.hot { background: rgba(220,38,38,0.12); color: var(--error); }
+    .lead-badge.warm { background: rgba(249,115,22,0.12); color: var(--accent-orange); }
+    .lead-badge.cold { background: rgba(100,116,139,0.12); color: var(--text-muted); }
+    .action-btn.active { background: var(--warning); color: white; }
     @media (max-width: 768px) { .msg-bubble { max-width: 85%; } }
   </style>
 </head>
@@ -954,11 +1141,11 @@ function getConversationPage(convId) {
         <button class="back-btn" onclick="window.location='/conversations'"><i data-lucide="arrow-left" style="width:18px;height:18px"></i></button>
         <div class="chat-avatar" id="chatAvatar">C</div>
         <div class="chat-info">
-          <div class="chat-name" id="customerName">Loading...</div>
+          <div class="chat-name-row"><div class="chat-name" id="customerName">Loading...</div><span id="leadBadge" class="lead-badge" style="display:none;"></span></div>
           <div class="chat-status" id="customerPhone"><i data-lucide="phone"></i><span id="phoneNumber"></span></div>
         </div>
         <div class="chat-actions">
-          <button class="action-btn" title="Handoff"><i data-lucide="user-plus" style="width:18px;height:18px"></i></button>
+          <button class="action-btn" id="handoffBtn" title="Take over from AI" onclick="toggleHandoff()"><i data-lucide="user-plus" style="width:18px;height:18px"></i></button>
         </div>
       </div>
       <div class="messages-container" id="msgList"></div>
@@ -981,6 +1168,9 @@ function getConversationPage(convId) {
         document.getElementById('customerName').textContent = name;
         document.getElementById('chatAvatar').textContent = name.charAt(0).toUpperCase();
         document.getElementById('phoneNumber').textContent = data.conversation.customer_phone;
+        renderLeadBadge(data.conversation.lead_temperature);
+        needsHuman = data.conversation.needs_human === true;
+        renderHandoff();
         lucide.createIcons();
         const list = document.getElementById('msgList');
         if (data.messages.length === 0) {
@@ -1010,6 +1200,26 @@ function getConversationPage(convId) {
           list.scrollTop = list.scrollHeight;
         }
         lucide.createIcons();
+      } catch (err) { console.error(err); }
+    }
+    let needsHuman = false;
+    function renderLeadBadge(temp) {
+      const badge = document.getElementById('leadBadge');
+      const t = ['hot', 'warm', 'cold'].includes(temp) ? temp : null;
+      if (!t || t === 'cold') { badge.style.display = 'none'; return; }
+      badge.style.display = 'inline-block';
+      badge.className = 'lead-badge ' + t;
+      badge.textContent = t === 'hot' ? '🔥 Hot lead' : 'Warm lead';
+    }
+    function renderHandoff() {
+      const btn = document.getElementById('handoffBtn');
+      btn.classList.toggle('active', needsHuman);
+      btn.title = needsHuman ? 'Human handling on — AI follow-ups paused (click to hand back to AI)' : 'Take over from AI';
+    }
+    async function toggleHandoff() {
+      try {
+        const res = await fetch('/api/conversations/' + convId + '/handoff', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ needs_human: !needsHuman }) });
+        if (res.ok) { needsHuman = !needsHuman; renderHandoff(); }
       } catch (err) { console.error(err); }
     }
     function escapeHtml(text) { if (typeof text !== 'string') return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
@@ -1213,18 +1423,32 @@ function getOrdersPage() {
   <title>BizChat AI - Orders</title>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <style>${sharedStyles}
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+    .filter-btn { padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); cursor: pointer; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 6px; }
+    .filter-btn:hover { border-color: var(--accent); color: var(--primary); }
+    .filter-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .filter-count { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgba(15,23,42,0.08); }
+    .filter-btn.active .filter-count { background: rgba(255,255,255,0.25); }
     .orders-table { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
     table { width: 100%; border-collapse: collapse; }
     thead { background: var(--bg); }
     th { padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
-    td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid var(--border); }
-    tr:hover { background: var(--bg); }
-    .status-select { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; border: none; cursor: pointer; }
-    .status-select.new { background: rgba(249,115,22,0.1); color: var(--accent-orange); }
-    .status-select.confirmed { background: rgba(59,130,246,0.1); color: var(--accent-blue); }
-    .status-select.completed { background: rgba(22,163,74,0.1); color: var(--success); }
-    .status-select.cancelled { background: rgba(220,38,38,0.1); color: var(--error); }
-    @media (max-width: 768px) { .orders-table { overflow-x: auto; display: block; } }
+    td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid var(--border); color: var(--text-primary); vertical-align: top; }
+    tbody tr { cursor: pointer; transition: background 0.15s; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: var(--bg); }
+    .order-time { white-space: nowrap; }
+    .order-time-rel { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .order-customer { font-weight: 600; }
+    .order-details { max-width: 360px; }
+    .order-when { font-size: 12px; color: var(--accent-blue); margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; }
+    .order-when svg { width: 13px; height: 13px; }
+    .status-select { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; border: none; cursor: pointer; appearance: none; -webkit-appearance: none; background-position: right 8px center; padding-right: 26px; }
+    .status-select.new { background: rgba(249,115,22,0.12); color: var(--accent-orange); }
+    .status-select.confirmed { background: rgba(59,130,246,0.12); color: var(--accent-blue); }
+    .status-select.completed { background: rgba(22,163,74,0.12); color: var(--success); }
+    .status-select.cancelled { background: rgba(220,38,38,0.12); color: var(--error); }
+    @media (max-width: 768px) { .orders-table { overflow-x: auto; display: block; } .order-details { max-width: none; } }
   </style>
 </head>
 <body>
@@ -1232,24 +1456,112 @@ function getOrdersPage() {
   <div class="main-content">
     <div class="top-bar"><h1 class="page-title">Orders</h1></div>
     <div class="container">
+      <div class="filter-bar" id="filterBar" style="display:none;">
+        <button class="filter-btn active" data-filter="all">All <span class="filter-count" id="count-all">0</span></button>
+        <button class="filter-btn" data-filter="new">New <span class="filter-count" id="count-new">0</span></button>
+        <button class="filter-btn" data-filter="confirmed">Confirmed <span class="filter-count" id="count-confirmed">0</span></button>
+        <button class="filter-btn" data-filter="completed">Completed <span class="filter-count" id="count-completed">0</span></button>
+      </div>
       <div id="ordersContent"></div>
     </div>
   </div>
   <div id="toast" class="toast"></div>
   <script>
     lucide.createIcons();
-    function showToast(message, type = 'success') { const toast = document.getElementById('toast'); toast.textContent = message; toast.className = 'toast show ' + type; setTimeout(() => { toast.className = 'toast'; }, 3000); }
+    var allOrders = [];
+    var currentFilter = 'all';
+    function showToast(message, type) { var toast = document.getElementById('toast'); toast.textContent = message; toast.className = 'toast show ' + (type || 'success'); setTimeout(function () { toast.className = 'toast'; }, 3000); }
+    function escapeHtml(text) { if (text === null || text === undefined) return ''; var div = document.createElement('div'); div.textContent = String(text); return div.innerHTML; }
+    function getTimeAgo(dateStr) { if (!dateStr) return ''; var diff = Math.floor((new Date() - new Date(dateStr)) / 1000); if (diff < 60) return 'just now'; if (diff < 3600) return Math.floor(diff / 60) + 'm ago'; if (diff < 86400) return Math.floor(diff / 3600) + 'h ago'; return Math.floor(diff / 86400) + 'd ago'; }
+    function fmtDateTime(dateStr) { return new Date(dateStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+
+    function renderEmpty() {
+      return '<div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><div class="empty-state-title">No orders yet</div><div class="empty-state-text">When customers place orders via WhatsApp, they\\'ll appear here automatically.</div></div>';
+    }
+    function renderFilterEmpty() {
+      return '<div class="empty-state" style="padding:40px 24px;"><i data-lucide="filter" style="width:36px;height:36px;opacity:0.4;margin-bottom:12px;"></i><div class="empty-state-text">No ' + escapeHtml(currentFilter) + ' orders.</div></div>';
+    }
+
+    function statusLabel(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+
+    function rowHtml(o) {
+      var status = (o.status || 'new').toLowerCase();
+      var when = o.requested_datetime ? '<div class="order-when"><i data-lucide="calendar-clock"></i>' + escapeHtml(fmtDateTime(o.requested_datetime)) + '</div>' : '';
+      var statuses = ['new', 'confirmed', 'completed', 'cancelled'];
+      var options = statuses.map(function (s) { return '<option value="' + s + '"' + (s === status ? ' selected' : '') + '>' + statusLabel(s) + '</option>'; }).join('');
+      var convAttr = o.conversation_id ? (' data-conv="' + o.conversation_id + '"') : '';
+      return '<tr' + convAttr + '>' +
+        '<td class="order-time">' + escapeHtml(fmtDateTime(o.created_at)) + '<div class="order-time-rel">' + getTimeAgo(o.created_at) + '</div></td>' +
+        '<td class="order-customer">' + escapeHtml(o.customer_phone) + '</td>' +
+        '<td class="order-details">' + escapeHtml(o.order_details) + when + '</td>' +
+        '<td><select class="status-select ' + status + '" data-id="' + o.id + '">' + options + '</select></td>' +
+        '</tr>';
+    }
+
+    function render() {
+      var content = document.getElementById('ordersContent');
+      if (allOrders.length === 0) { document.getElementById('filterBar').style.display = 'none'; content.innerHTML = renderEmpty(); lucide.createIcons(); return; }
+      document.getElementById('filterBar').style.display = 'flex';
+      var counts = { all: allOrders.length, new: 0, confirmed: 0, completed: 0 };
+      allOrders.forEach(function (o) { var s = (o.status || 'new').toLowerCase(); if (counts[s] !== undefined) counts[s]++; });
+      document.getElementById('count-all').textContent = counts.all;
+      document.getElementById('count-new').textContent = counts.new;
+      document.getElementById('count-confirmed').textContent = counts.confirmed;
+      document.getElementById('count-completed').textContent = counts.completed;
+
+      var filtered = currentFilter === 'all' ? allOrders : allOrders.filter(function (o) { return (o.status || 'new').toLowerCase() === currentFilter; });
+      if (filtered.length === 0) { content.innerHTML = renderFilterEmpty(); lucide.createIcons(); return; }
+      content.innerHTML = '<div class="orders-table"><table><thead><tr><th>Time</th><th>Customer</th><th>Order Details</th><th>Status</th></tr></thead><tbody>' +
+        filtered.map(rowHtml).join('') + '</tbody></table></div>';
+      lucide.createIcons();
+      attachRowHandlers();
+    }
+
+    function attachRowHandlers() {
+      document.querySelectorAll('.status-select').forEach(function (sel) {
+        sel.addEventListener('click', function (e) { e.stopPropagation(); });
+        sel.addEventListener('change', function (e) { e.stopPropagation(); updateStatus(sel.getAttribute('data-id'), sel.value); });
+      });
+      document.querySelectorAll('tbody tr').forEach(function (tr) {
+        var conv = tr.getAttribute('data-conv');
+        if (!conv) return;
+        tr.addEventListener('click', function () { window.location = '/conversations/' + conv; });
+      });
+    }
+
+    async function updateStatus(id, status) {
+      try {
+        var res = await fetch('/api/orders/' + id + '/status', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: status }) });
+        if (!res.ok) { showToast('Failed to update status', 'error'); return; }
+        var order = allOrders.find(function (o) { return String(o.id) === String(id); });
+        if (order) order.status = status;
+        showToast('Order marked ' + statusLabel(status));
+        render();
+      } catch (err) { console.error(err); showToast('Failed to update status', 'error'); }
+    }
+
     async function loadOrders() {
       try {
-        const meRes = await fetch('/api/auth/me');
+        var meRes = await fetch('/api/auth/me');
         if (!meRes.ok) { window.location = '/login'; return; }
-        const me = await meRes.json();
+        var me = await meRes.json();
         document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
         document.getElementById('userAvatar').textContent = (me.shop_name || 'B').charAt(0).toUpperCase();
-        const content = document.getElementById('ordersContent');
-        content.innerHTML = '<div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><div class="empty-state-title">No orders yet</div><div class="empty-state-text">When customers place orders via WhatsApp, they will appear here.</div><a href="/settings" class="btn btn-secondary" style="margin-top:16px;">Configure Order Settings</a></div>';
+        allOrders = await fetch('/api/orders').then(function (r) { return r.json(); });
+        if (!Array.isArray(allOrders)) allOrders = [];
+        render();
       } catch (err) { console.error(err); }
     }
+
+    document.querySelectorAll('.filter-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.filter-btn').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentFilter = btn.getAttribute('data-filter');
+        render();
+      });
+    });
+
     async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location = '/login'; }
     loadOrders();
   </script>
@@ -1337,6 +1649,7 @@ function getAnalyticsPage() {
 async function startServer() {
   await createTables();
   await findDuplicateWhatsAppPhoneIds().catch(() => {});
+  startFollowUpScheduler();
   app.listen(PORT, () => {
     console.log('BizChat AI server running on port ' + PORT);
   });
