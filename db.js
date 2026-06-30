@@ -42,10 +42,18 @@ async function createTables() {
         business_id INTEGER REFERENCES businesses(id) ON DELETE CASCADE,
         customer_phone VARCHAR(255) NOT NULL,
         customer_name VARCHAR(255),
+        lead_temperature VARCHAR(20) DEFAULT 'cold',
+        follow_up_at TIMESTAMP WITH TIME ZONE,
+        last_customer_reply_at TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (business_id, customer_phone)
       );
     `);
+
+    // Migrate existing conversations table if columns don't exist yet
+    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS lead_temperature VARCHAR(20) DEFAULT 'cold';`);
+    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS follow_up_at TIMESTAMP WITH TIME ZONE;`);
+    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS last_customer_reply_at TIMESTAMP WITH TIME ZONE;`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS messages (
@@ -64,19 +72,13 @@ async function createTables() {
         conversation_id INTEGER REFERENCES conversations(id) ON DELETE SET NULL,
         customer_phone VARCHAR(255) NOT NULL,
         order_details TEXT NOT NULL,
-        requested_datetime TIMESTAMP WITH TIME ZONE,
+        requested_datetime VARCHAR(255),
         status VARCHAR(20) NOT NULL DEFAULT 'new',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // Columns added for the "AI that takes action" features. Use IF NOT EXISTS
-    // so existing deployments upgrade in place without a manual migration.
-    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS lead_temperature VARCHAR(10) DEFAULT 'cold';`);
-    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS follow_up_at TIMESTAMP WITH TIME ZONE;`);
-    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS needs_human BOOLEAN DEFAULT false;`);
-
-    console.log('Tables created successfully (if they did not exist).');
+    console.log('Tables created/migrated successfully.');
   } catch (err) {
     console.error('Error creating tables:', err);
     throw err;
