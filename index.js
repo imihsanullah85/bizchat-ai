@@ -41,9 +41,9 @@ async function insertBusiness(email, passwordHash, shopName) {
 
 async function updateBusiness(id, updates) {
   const keys = Object.keys(updates);
-  const setString = keys.map((key, i) => `"${key}" = $${i + 2}`).join(', ');
+  const setString = keys.map((key, i) => '"' + key + '" = $' + (i + 2)).join(', ');
   const values = [id, ...Object.values(updates)];
-  const { rows } = await pool.query(`UPDATE businesses SET ${setString} WHERE id = $1 RETURNING *`, values);
+  const { rows } = await pool.query('UPDATE businesses SET ' + setString + ' WHERE id = $1 RETURNING *', values);
   return rows[0];
 }
 
@@ -66,6 +66,31 @@ async function ensureConversation(businessId, customerPhone, customerName) {
   const { rows } = await pool.query(
     'INSERT INTO conversations (business_id, customer_phone, customer_name) VALUES ($1, $2, $3) ON CONFLICT (business_id, customer_phone) DO UPDATE SET customer_name = EXCLUDED.customer_name RETURNING *',
     [businessId, customerPhone, customerName || '']
+  );
+  return rows[0];
+}
+
+// Update specific meta columns on a conversation using safe parameterized placeholders.
+// Accepts an object with any subset of: lead_temperature, follow_up_at, last_customer_reply_at.
+async function updateConversationMeta(conversationId, updates) {
+  const allowed = ['lead_temperature', 'follow_up_at', 'last_customer_reply_at'];
+  const parts = [];
+  const vals = [];
+  for (const key of allowed) {
+    if (updates && Object.prototype.hasOwnProperty.call(updates, key)) {
+      parts.push(key + ' = $' + (vals.length + 1));
+      vals.push(updates[key]);
+    }
+  }
+  if (!parts.length) return;
+  vals.push(conversationId);
+  await pool.query('UPDATE conversations SET ' + parts.join(', ') + ' WHERE id = $' + vals.length, vals);
+}
+
+async function insertOrder(businessId, conversationId, customerPhone, orderDetails, requestedDatetime) {
+  const { rows } = await pool.query(
+    'INSERT INTO orders (business_id, conversation_id, customer_phone, order_details, requested_datetime, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [businessId, conversationId, customerPhone, orderDetails, requestedDatetime || null, 'new']
   );
   return rows[0];
 }
@@ -137,7 +162,11 @@ app.post('/webhook', async (req, res) => {
     for (const entry of data.entry || []) {
       for (const change of entry.changes || []) {
         for (const msg of change.value.messages || []) {
-          await handleWhatsAppMessage(msg, change.value);
+          try {
+            await handleWhatsAppMessage(msg, change.value);
+          } catch (msgErr) {
+            console.error('Error handling message from', msg.from, ':', msgErr);
+          }
         }
       }
     }
@@ -150,9 +179,9 @@ app.post('/webhook', async (req, res) => {
 
 async function handleWhatsAppMessage(msg, value) {
   const customerPhone = msg.from;
-  const businessPhoneId = value.metadata?.phone_number_id;
-  const messageText = msg.text?.body || '';
-  const customerName = msg.profile?.name || 'Customer';
+  const businessPhoneId = value.metadata && value.metadata.phone_number_id;
+  const messageText = (msg.text && msg.text.body) || '';
+  const customerName = (msg.profile && msg.profile.name) || 'Customer';
   if (!messageText) return;
 
   const business = await getBusinessByWhatsAppPhoneId(businessPhoneId);
@@ -160,55 +189,223 @@ async function handleWhatsAppMessage(msg, value) {
 
   const conversation = await ensureConversation(business.id, customerPhone, customerName);
   await insertMessage(conversation.id, 'in', messageText);
-  const aiResponse = await generateAIResponse(business, messageText);
-  await insertMessage(conversation.id, 'out', aiResponse);
-  await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, aiResponse);
+
+  // Record the customer reply timestamp (used for follow-up logic)
+  await updateConversationMeta(conversation.id, { last_customer_reply_at: new Date() });
+
+  const aiResult = await generateAIResponse(business, messageText);
+  const replyText = aiResult.customer_reply;
+
+  // Send via WhatsApp first; only record in DB if credentials are configured.
+  // (If not configured we still save locally so conversation history is useful.)
+  const sent = await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, replyText);
+  if (sent || !process.env.WHATSAPP_TOKEN) {
+    await insertMessage(conversation.id, 'out', replyText);
+  }
+
+  // Update lead temperature if detected
+  const validTemps = ['cold', 'warm', 'hot'];
+  if (aiResult.lead_temperature && validTemps.includes(aiResult.lead_temperature)) {
+    await updateConversationMeta(conversation.id, { lead_temperature: aiResult.lead_temperature });
+  }
+
+  // Save detected order to orders table
+  if (aiResult.order_detected) {
+    try {
+      const od = aiResult.order_detected;
+      let details = '';
+      if (typeof od.item === 'string') {
+        details = od.item + (od.quantity ? ' x' + od.quantity : '');
+      } else {
+        details = JSON.stringify(od);
+      }
+      await insertOrder(business.id, conversation.id, customerPhone, details, od.requested_datetime || null);
+      console.log('Order saved for', customerPhone, ':', details);
+    } catch (err) {
+      console.error('Failed to save order:', err);
+    }
+  }
+
+  // Schedule a follow-up 2 hours from now if conversation seems unresolved
+  if (aiResult.needs_follow_up) {
+    const followUpAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    await updateConversationMeta(conversation.id, { follow_up_at: followUpAt });
+  }
+}
+
+// Parse the AI JSON response safely, stripping markdown fences if present.
+function parseAIJSON(raw) {
+  const fallback = { customer_reply: raw || 'Sorry, I am having trouble responding right now.', lead_temperature: 'cold', order_detected: null, needs_follow_up: false };
+  if (!raw) return fallback;
+  // Try direct parse first
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      customer_reply: parsed.customer_reply || 'Sorry, I am having trouble responding right now.',
+      lead_temperature: parsed.lead_temperature || 'cold',
+      order_detected: parsed.order_detected || null,
+      needs_follow_up: !!parsed.needs_follow_up
+    };
+  } catch (_) {}
+  // Strip markdown code fences and retry
+  const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  try {
+    const parsed = JSON.parse(stripped);
+    return {
+      customer_reply: parsed.customer_reply || 'Sorry, I am having trouble responding right now.',
+      lead_temperature: parsed.lead_temperature || 'cold',
+      order_detected: parsed.order_detected || null,
+      needs_follow_up: !!parsed.needs_follow_up
+    };
+  } catch (_) {}
+  // Final fallback: treat stripped text as plain reply
+  console.warn('AI response was not valid JSON; using as plain text reply.');
+  return { customer_reply: stripped || raw, lead_temperature: 'cold', order_detected: null, needs_follow_up: false };
 }
 
 async function generateAIResponse(business, customerMessage) {
   const businessRecord = await getBusinessById(business.id) || business;
-  const systemPrompt = `You are a helpful AI assistant for "${businessRecord.shop_name || 'the business'}", a business in Pakistan.
-
-BUSINESS INFORMATION:
-- Shop Name: ${businessRecord.shop_name || 'N/A'}
-- Description: ${businessRecord.description || 'N/A'}
-- Services: ${businessRecord.services || 'N/A'}
-- Prices: ${businessRecord.prices || 'N/A'}
-- Working Hours: ${businessRecord.timings || 'N/A'}
-- FAQs: ${businessRecord.faqs || 'N/A'}
-
-INSTRUCTIONS:
-- Respond in a friendly, helpful manner
-- Keep responses concise (under 200 words)
-- If asked about prices, services, or timings, use the business info provided
-- If you don't know something specific, suggest the customer contact the shop directly
-- Be polite and use Pakistani English expressions naturally`;
+  const shopName = businessRecord.shop_name || 'the business';
+  const systemPrompt = 'You are an AI employee for "' + shopName + '", a business in Pakistan. You take real action — not just chat.\n\n'
+    + 'BUSINESS INFORMATION:\n'
+    + '- Shop Name: ' + (businessRecord.shop_name || 'N/A') + '\n'
+    + '- Description: ' + (businessRecord.description || 'N/A') + '\n'
+    + '- Services/Products: ' + (businessRecord.services || 'N/A') + '\n'
+    + '- Prices: ' + (businessRecord.prices || 'N/A') + '\n'
+    + '- Working Hours: ' + (businessRecord.timings || 'N/A') + '\n'
+    + '- FAQs: ' + (businessRecord.faqs || 'N/A') + '\n\n'
+    + 'YOUR TASK:\n'
+    + 'Respond ONLY with a valid JSON object (no markdown, no code fences) with these exact fields:\n\n'
+    + '{\n'
+    + '  "customer_reply": "<your friendly WhatsApp reply, under 200 words, in Pakistani English>",\n'
+    + '  "lead_temperature": "<cold|warm|hot>",\n'
+    + '  "order_detected": null,\n'
+    + '  "needs_follow_up": false\n'
+    + '}\n\n'
+    + 'RULES:\n'
+    + '- "customer_reply": Always a friendly, concise reply. Use business info above. If unsure, invite them to contact the shop directly.\n'
+    + '- "lead_temperature": Set to "hot" if message contains price questions, payment/location queries, or urgent availability requests. Set to "warm" if clear interest but not urgent. Otherwise "cold".\n'
+    + '- "order_detected": If the customer clearly expresses buying intent (e.g. "I want to order X", "book an appointment", "I will take 2 of Y", "can I get size M"), set this to: { "item": "<item or service name>", "quantity": "<number or null>", "requested_datetime": "<date/time string or null>" }. Otherwise set to null.\n'
+    + '- "needs_follow_up": Set to true if the conversation seems unresolved — e.g. the customer asked something and there is no clear next step or commitment. Set to false if they ordered, said thanks, or got a definitive answer.';
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'openrouter/free', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: customerMessage }] })
+      headers: { Authorization: 'Bearer ' + process.env.OPENROUTER_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openrouter/free',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: customerMessage }
+        ],
+        response_format: { type: 'json_object' }
+      })
     });
     const data = await response.json();
-    if (data.error) { console.error('OpenRouter error:', data.error); return 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.'; }
-    return data.choices?.[0]?.message?.content || 'Sorry, I am having trouble responding right now.';
+    if (data.error) {
+      console.error('OpenRouter error:', data.error);
+      return { customer_reply: 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.', lead_temperature: 'cold', order_detected: null, needs_follow_up: false };
+    }
+    const raw = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    return parseAIJSON(raw);
   } catch (error) {
     console.error('OpenRouter fetch error:', error);
-    return 'Sorry, I am having trouble responding right now.';
+    return { customer_reply: 'Sorry, I am having trouble responding right now.', lead_temperature: 'cold', order_detected: null, needs_follow_up: false };
   }
 }
 
+// Returns true if the message was sent (or credentials are unconfigured and we skip),
+// false on a confirmed API/network failure.
 async function sendWhatsAppMessage(whatsappNumber, phoneId, to, text) {
   const token = process.env.WHATSAPP_TOKEN;
-  if (!token || !phoneId) { console.log('WhatsApp credentials not configured'); return; }
+  if (!token || !phoneId) { console.log('WhatsApp credentials not configured'); return false; }
   try {
-    await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+    const res = await fetch('https://graph.facebook.com/v19.0/' + phoneId + '/messages', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text', text: { body: text } })
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: to, type: 'text', text: { body: text } })
     });
-  } catch (error) { console.error('WhatsApp send error:', error); }
+    if (!res.ok) {
+      const body = await res.text();
+      console.error('WhatsApp send failed (' + res.status + '):', body);
+      return false;
+    }
+    return true;
+  } catch (error) { console.error('WhatsApp send error:', error); return false; }
+}
+
+// ============================================
+// FOLLOW-UP SCHEDULER
+// ============================================
+
+async function runFollowUpScheduler() {
+  try {
+    const now = new Date();
+    const cutoff24h = new Date(now - 24 * 60 * 60 * 1000);
+    // Atomically claim due conversations by clearing follow_up_at in the same query.
+    // This prevents duplicate sends if the interval fires while a previous run is still going.
+    const { rows } = await pool.query(
+      'UPDATE conversations SET follow_up_at = NULL'
+      + ' WHERE id IN ('
+      + '   SELECT c.id FROM conversations c'
+      + '   WHERE c.follow_up_at IS NOT NULL'
+      + '     AND c.follow_up_at <= $1'
+      + '     AND (c.last_customer_reply_at IS NULL OR c.last_customer_reply_at < c.follow_up_at)'
+      + '     AND (c.last_customer_reply_at IS NULL OR c.last_customer_reply_at > $2)'
+      + '   FOR UPDATE SKIP LOCKED'
+      + ' )'
+      + ' RETURNING id, business_id, customer_phone',
+      [now, cutoff24h]
+    );
+
+    if (!rows.length) return;
+
+    // Fetch business credentials for the claimed conversations
+    const businessIds = [...new Set(rows.map(function(r) { return r.business_id; }))];
+    const { rows: businesses } = await pool.query(
+      'SELECT id, whatsapp_phone_id, whatsapp_number FROM businesses WHERE id = ANY($1)',
+      [businessIds]
+    );
+    const bizMap = {};
+    businesses.forEach(function(b) { bizMap[b.id] = b; });
+
+    for (const conv of rows) {
+      const biz = bizMap[conv.business_id];
+      if (!biz) continue;
+      const token = process.env.WHATSAPP_TOKEN;
+      if (!token || !biz.whatsapp_phone_id) {
+        console.log('WhatsApp not configured, skipping follow-up for', conv.customer_phone);
+        continue;
+      }
+      try {
+        const followUpMsg = 'Hi! Just checking \u2014 were you able to find what you were looking for? Happy to help if you have more questions \uD83D\uDE0A';
+        const waRes = await fetch('https://graph.facebook.com/v19.0/' + biz.whatsapp_phone_id + '/messages', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: conv.customer_phone, type: 'text', text: { body: followUpMsg } })
+        });
+        if (!waRes.ok) {
+          const errBody = await waRes.text();
+          console.error('Follow-up WhatsApp send failed for', conv.customer_phone, ':', waRes.status, errBody);
+          // Restore follow_up_at so it is retried on the next scheduler run (5 min from now).
+          const retryAt = new Date(Date.now() + 5 * 60 * 1000);
+          await pool.query('UPDATE conversations SET follow_up_at = $1 WHERE id = $2', [retryAt, conv.id]);
+          continue;
+        }
+        await pool.query('INSERT INTO messages (conversation_id, direction, content) VALUES ($1, $2, $3)', [conv.id, 'out', followUpMsg]);
+        console.log('Follow-up sent to', conv.customer_phone);
+      } catch (err) {
+        console.error('Follow-up send error for conversation', conv.id, ':', err);
+        // Restore follow_up_at so it is retried rather than permanently dropped.
+        try {
+          const retryAt = new Date(Date.now() + 5 * 60 * 1000);
+          await pool.query('UPDATE conversations SET follow_up_at = $1 WHERE id = $2', [retryAt, conv.id]);
+        } catch (_) {}
+      }
+    }
+  } catch (err) {
+    console.error('Follow-up scheduler error:', err);
+  }
 }
 
 // ============================================
@@ -250,7 +447,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
 
 app.get('/api/validate/tenant-data', requireAuth, async (req, res) => {
   const duplicates = await findDuplicateWhatsAppPhoneIds();
-  res.json({ valid: duplicates.length === 0, duplicateWhatsAppMappings: duplicates.map(({ whatsapp_phone_id, businessIds }) => ({ whatsapp_phone_id, count: businessIds.length })) });
+  res.json({ valid: duplicates.length === 0, duplicateWhatsAppMappings: duplicates.map(function(d) { return { whatsapp_phone_id: d.whatsapp_phone_id, count: d.businessIds.length }; }) });
 });
 
 // ============================================
@@ -259,7 +456,7 @@ app.get('/api/validate/tenant-data', requireAuth, async (req, res) => {
 
 app.put('/api/business', requireAuth, async (req, res) => {
   const updates = {};
-  ['shop_name', 'description', 'services', 'prices', 'timings', 'faqs', 'whatsapp_number', 'whatsapp_phone_id', 'payment_link', 'category', 'services_list', 'business_hours'].forEach((key) => {
+  ['shop_name', 'description', 'services', 'prices', 'timings', 'faqs', 'whatsapp_number', 'whatsapp_phone_id', 'payment_link', 'category', 'services_list', 'business_hours'].forEach(function(key) {
     if (Object.prototype.hasOwnProperty.call(req.body, key)) updates[key] = req.body[key];
   });
   if (!Object.keys(updates).length) return res.status(400).json({ success: false, error: 'No update fields provided' });
@@ -325,13 +522,13 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
 
     for (const conv of conversations) {
       const messages = await getMessagesForConversation(conv.id);
-      messages.forEach(msg => {
+      messages.forEach(function(msg) {
         totalMessages++;
         const date = new Date(msg.timestamp).toISOString().split('T')[0];
         messagesPerDay[date] = (messagesPerDay[date] || 0) + 1;
         if (msg.direction === 'in') {
           const words = msg.content.toLowerCase().split(/\s+/);
-          words.forEach(word => {
+          words.forEach(function(word) {
             if (word.length > 3 && ['price', 'cost', 'time', 'hour', 'open', 'close', 'service', 'available', 'order'].includes(word)) {
               questionKeywords[word] = (questionKeywords[word] || 0) + 1;
             }
@@ -347,23 +544,23 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
       last7Days.push({ date: dateStr, count: messagesPerDay[dateStr] || 0 });
     }
 
-    const topQuestions = Object.entries(questionKeywords).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([keyword, count]) => ({ keyword, count }));
+    const topQuestions = Object.entries(questionKeywords).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 5).map(function(e) { return { keyword: e[0], count: e[1] }; });
     const busiestHours = {};
-    conversations.forEach(conv => {
+    conversations.forEach(function(conv) {
       if (conv.last_message_time) {
         const hour = new Date(conv.last_message_time).getHours();
         busiestHours[hour] = (busiestHours[hour] || 0) + 1;
       }
     });
-    const busiestHour = Object.entries(busiestHours).sort((a, b) => b[1] - a[1])[0];
+    const busiestHourEntry = Object.entries(busiestHours).sort(function(a, b) { return b[1] - a[1]; })[0];
 
     res.json({
       totalConversations: conversations.length,
       totalMessages,
-      averagePerDay: last7Days.reduce((a, b) => a + b.count, 0) / 7,
+      averagePerDay: last7Days.reduce(function(a, b) { return a + b.count; }, 0) / 7,
       messagesLast7Days: last7Days,
       topQuestions,
-      busiestHour: busiestHour ? `${busiestHour[0]}:00` : 'N/A',
+      busiestHour: busiestHourEntry ? busiestHourEntry[0] + ':00' : 'N/A',
       avgResponseTime: '2 min'
     });
   } catch (error) { console.error('Analytics error:', error); res.status(500).json({ error: 'Failed to fetch analytics' }); }
@@ -373,15 +570,15 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
 // PAGE ROUTES
 // ============================================
 
-app.get('/', (req, res) => { req.session.businessId ? res.redirect('/dashboard') : res.redirect('/login'); });
-app.get('/login', (req, res) => { res.send(getLoginPage()); });
-app.get('/register', (req, res) => { res.send(getRegisterPage()); });
-app.get('/dashboard', (req, res) => { if (!req.session.businessId) return res.redirect('/login'); res.send(getDashboardPage()); });
-app.get('/settings', (req, res) => { if (!req.session.businessId) return res.redirect('/login'); res.send(getSettingsPage()); });
-app.get('/conversations', (req, res) => { if (!req.session.businessId) return res.redirect('/login'); res.send(getConversationsListPage()); });
-app.get('/conversations/:id', (req, res) => { if (!req.session.businessId) return res.redirect('/login'); res.send(getConversationPage(req.params.id)); });
-app.get('/orders', (req, res) => { if (!req.session.businessId) return res.redirect('/login'); res.send(getOrdersPage()); });
-app.get('/analytics', (req, res) => { if (!req.session.businessId) return res.redirect('/login'); res.send(getAnalyticsPage()); });
+app.get('/', function(req, res) { req.session.businessId ? res.redirect('/dashboard') : res.redirect('/login'); });
+app.get('/login', function(req, res) { res.send(getLoginPage()); });
+app.get('/register', function(req, res) { res.send(getRegisterPage()); });
+app.get('/dashboard', function(req, res) { if (!req.session.businessId) return res.redirect('/login'); res.send(getDashboardPage()); });
+app.get('/settings', function(req, res) { if (!req.session.businessId) return res.redirect('/login'); res.send(getSettingsPage()); });
+app.get('/conversations', function(req, res) { if (!req.session.businessId) return res.redirect('/login'); res.send(getConversationsListPage()); });
+app.get('/conversations/:id', function(req, res) { if (!req.session.businessId) return res.redirect('/login'); res.send(getConversationPage(req.params.id)); });
+app.get('/orders', function(req, res) { if (!req.session.businessId) return res.redirect('/login'); res.send(getOrdersPage()); });
+app.get('/analytics', function(req, res) { if (!req.session.businessId) return res.redirect('/login'); res.send(getAnalyticsPage()); });
 
 // ============================================
 // SHARED STYLES & COMPONENTS
@@ -509,22 +706,18 @@ function getSidebar(activePage) {
     { href: '/settings', icon: 'settings', label: 'Settings', page: 'settings' },
   ];
 
-  return `<aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand"><i data-lucide="message-circle"></i><span>BizChat AI</span></div>
-    <nav class="nav-section">
-      ${navItems.map(item => `<a href="${item.href}" class="nav-item ${activePage === item.page ? 'active' : ''}"><i data-lucide="${item.icon}"></i><span>${item.label}</span></a>`).join('')}
-    </nav>
-    <div class="nav-bottom">
-      <div class="user-menu">
-        <div class="user-avatar" id="userAvatar">B</div>
-        <div class="user-info"><div class="user-name" id="businessNameSidebar">Business</div></div>
-      </div>
-      <button class="logout-btn" onclick="logout()"><i data-lucide="log-out"></i><span>Logout</span></button>
-    </div>
-  </aside>
-  <div class="mobile-nav" id="mobileNav">
-    ${navItems.map(item => `<a href="${item.href}" class="mobile-nav-item ${activePage === item.page ? 'active' : ''}"><i data-lucide="${item.icon}"></i><span>${item.label}</span></a>`).join('')}
-  </div>`;
+  return '<aside class="sidebar" id="sidebar">'
+    + '<div class="sidebar-brand"><i data-lucide="message-circle"></i><span>BizChat AI</span></div>'
+    + '<nav class="nav-section">'
+    + navItems.map(function(item) { return '<a href="' + item.href + '" class="nav-item ' + (activePage === item.page ? 'active' : '') + '"><i data-lucide="' + item.icon + '"></i><span>' + item.label + '</span></a>'; }).join('')
+    + '</nav>'
+    + '<div class="nav-bottom">'
+    + '<div class="user-menu"><div class="user-avatar" id="userAvatar">B</div><div class="user-info"><div class="user-name" id="businessNameSidebar">Business</div></div></div>'
+    + '<button class="logout-btn" onclick="logout()"><i data-lucide="log-out"></i><span>Logout</span></button>'
+    + '</div></aside>'
+    + '<div class="mobile-nav" id="mobileNav">'
+    + navItems.map(function(item) { return '<a href="' + item.href + '" class="mobile-nav-item ' + (activePage === item.page ? 'active' : '') + '"><i data-lucide="' + item.icon + '"></i><span>' + item.label + '</span></a>'; }).join('')
+    + '</div>';
 }
 
 // ============================================
@@ -571,8 +764,8 @@ function getLoginPage() {
     <p class="subtitle">Sign in to manage your WhatsApp AI assistant.</p>
     <div id="error" class="error"></div>
     <form id="loginForm">
-      <div class="form-group"><label for="email">Email</label><input type="email" id="email" required placeholder="hello@business.com"></div>
-      <div class="form-group"><label for="password">Password</label><input type="password" id="password" required placeholder="Your password"></div>
+      <div class="form-group"><label for="email">Email</label><input type="email" id="email" autocomplete="email" required placeholder="hello@business.com"></div>
+      <div class="form-group"><label for="password">Password</label><input type="password" id="password" autocomplete="current-password" required placeholder="Your password"></div>
       <button type="submit" class="btn"><span class="spinner"></span><span>Sign In</span></button>
     </form>
     <p class="footer">New here? <a href="/register">Create account</a></p>
@@ -638,9 +831,9 @@ function getRegisterPage() {
     <p class="subtitle">Start managing your WhatsApp AI assistant in minutes.</p>
     <div id="error" class="error"></div>
     <form id="registerForm">
-      <div class="form-group"><label for="shop_name">Business Name</label><input type="text" id="shop_name" required placeholder="e.g., Ahmed Electronics"></div>
-      <div class="form-group"><label for="email">Email</label><input type="email" id="email" required placeholder="hello@business.com"></div>
-      <div class="form-group"><label for="password">Password</label><input type="password" id="password" required placeholder="Create password"></div>
+      <div class="form-group"><label for="shop_name">Business Name</label><input type="text" id="shop_name" autocomplete="organization" required placeholder="e.g., Ahmed Electronics"></div>
+      <div class="form-group"><label for="email">Email</label><input type="email" id="email" autocomplete="email" required placeholder="hello@business.com"></div>
+      <div class="form-group"><label for="password">Password</label><input type="password" id="password" autocomplete="new-password" required placeholder="Create password"></div>
       <button type="submit" class="btn"><span class="spinner"></span><span>Create Account</span></button>
     </form>
     <p class="footer">Already have an account? <a href="/login">Sign in</a></p>
@@ -778,11 +971,11 @@ function getDashboardPage() {
         } else {
           convList.innerHTML = convs.slice(0, 5).map(conv => {
             const initial = (conv.customer_name || conv.customer_phone || 'C').charAt(0).toUpperCase();
-            return '<div class="conv-item" onclick="window.location=\\'/conversations/' + conv.id + '\\'">' +
-              '<div class="conv-avatar">' + initial + '</div>' +
-              '<div class="conv-info"><div class="conv-name">' + escapeHtml(conv.customer_name || conv.customer_phone) + '</div>' +
-              '<div class="conv-preview">' + escapeHtml(conv.last_message || 'No messages') + '</div></div>' +
-              '<div class="conv-meta"><div class="conv-time">' + getTimeAgo(conv.last_message_time) + '</div></div></div>';
+            return '<div class="conv-item" onclick="window.location=\'/conversations/' + conv.id + '\'">'
+              + '<div class="conv-avatar">' + initial + '</div>'
+              + '<div class="conv-info"><div class="conv-name">' + escapeHtml(conv.customer_name || conv.customer_phone) + '</div>'
+              + '<div class="conv-preview">' + escapeHtml(conv.last_message || 'No messages') + '</div></div>'
+              + '<div class="conv-meta"><div class="conv-time">' + getTimeAgo(conv.last_message_time) + '</div></div></div>';
           }).join('');
         }
         const setupItems = [
@@ -793,10 +986,10 @@ function getDashboardPage() {
         const checklist = document.getElementById('checklistItems');
         checklist.innerHTML = setupItems.map(item => {
           const isDone = me[item.key] && me[item.key] !== '';
-          return '<div class="checklist-item" onclick="window.location=\\'/settings\\'">' +
-            '<div class="check-icon ' + (isDone ? 'done' : 'pending') + '">' + (isDone ? '<i data-lucide="check"></i>' : '<i data-lucide="circle"></i>') + '</div>' +
-            '<div class="check-info"><div class="check-title">' + item.label + '</div><div class="check-hint">' + item.hint + '</div></div>' +
-            '<div class="check-arrow"><i data-lucide="chevron-right"></i></div></div>';
+          return '<div class="checklist-item" onclick="window.location=\'/settings\'">'
+            + '<div class="check-icon ' + (isDone ? 'done' : 'pending') + '">' + (isDone ? '<i data-lucide="check"></i>' : '<i data-lucide="circle"></i>') + '</div>'
+            + '<div class="check-info"><div class="check-title">' + item.label + '</div><div class="check-hint">' + item.hint + '</div></div>'
+            + '<div class="check-arrow"><i data-lucide="chevron-right"></i></div></div>';
         }).join('');
         document.getElementById('topQuestion').textContent = 'price';
         document.getElementById('busiestHour').textContent = '2 PM';
@@ -889,11 +1082,11 @@ function getConversationsListPage() {
         } else {
           convList.innerHTML = convs.map(conv => {
             const initial = (conv.customer_name || conv.customer_phone || 'C').charAt(0).toUpperCase();
-            return '<div class="conv-item" onclick="window.location=\\'/conversations/' + conv.id + '\\'">' +
-              '<div class="conv-avatar">' + initial + '</div>' +
-              '<div class="conv-info"><div class="conv-name">' + escapeHtml(conv.customer_name || conv.customer_phone) + '</div>' +
-              '<div class="conv-preview">' + escapeHtml(conv.last_message || 'No messages') + '</div></div>' +
-              '<div class="conv-meta"><div class="conv-time">' + getTimeAgo(conv.last_message_time) + '</div></div></div>';
+            return '<div class="conv-item" onclick="window.location=\'/conversations/' + conv.id + '\'">'
+              + '<div class="conv-avatar">' + initial + '</div>'
+              + '<div class="conv-info"><div class="conv-name">' + escapeHtml(conv.customer_name || conv.customer_phone) + '</div>'
+              + '<div class="conv-preview">' + escapeHtml(conv.last_message || 'No messages') + '</div></div>'
+              + '<div class="conv-meta"><div class="conv-time">' + getTimeAgo(conv.last_message_time) + '</div></div></div>';
           }).join('');
         }
         lucide.createIcons();
@@ -929,7 +1122,7 @@ function getConversationPage(convId) {
     .chat-actions { display: flex; gap: 8px; }
     .action-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--bg); border: none; cursor: pointer; transition: all 0.2s; }
     .action-btn:hover { background: var(--border); }
-    .messages-container { flex: 1; overflow-y: auto; padding: 20px; background: #e5ddd5; background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4ccc4' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+    .messages-container { flex: 1; overflow-y: auto; padding: 20px; background: #e5ddd5; }
     .date-separator { text-align: center; padding: 12px 0; }
     .date-separator span { background: rgba(255,255,255,0.8); padding: 6px 12px; border-radius: 8px; font-size: 11px; color: var(--text-muted); font-weight: 500; }
     .msg { display: flex; gap: 8px; margin-bottom: 8px; animation: fadeIn 0.2s ease; }
@@ -1072,7 +1265,6 @@ function getSettingsPage() {
     <div class="top-bar"><h1 class="page-title">Settings</h1></div>
     <div class="container">
       <div class="settings-grid">
-        <!-- Business Identity -->
         <div class="settings-card" id="business">
           <div class="card-header"><div class="card-icon"><i data-lucide="store"></i></div><h2 class="card-title">Business Identity</h2></div>
           <div class="card-body">
@@ -1082,9 +1274,8 @@ function getSettingsPage() {
             <button class="btn btn-primary save-card-btn" onclick="saveSection('identity')"><span>Save</span></button>
           </div>
         </div>
-        <!-- Services & Pricing -->
         <div class="settings-card" id="services">
-          <div class="card-header"><div class="card-icon"><i data-lucide="list"></i></div><h2 class="card-title">Services & Pricing</h2></div>
+          <div class="card-header"><div class="card-icon"><i data-lucide="list"></i></div><h2 class="card-title">Services &amp; Pricing</h2></div>
           <div class="card-body">
             <div id="servicesList">
               <div class="service-row"><input type="text" class="input" placeholder="Service name" name="serviceName[]"><input type="text" class="input" placeholder="Price" name="servicePrice[]"><button type="button" class="delete-row-btn" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
@@ -1093,7 +1284,6 @@ function getSettingsPage() {
             <button class="btn btn-primary save-card-btn" onclick="saveSection('services')"><span>Save</span></button>
           </div>
         </div>
-        <!-- Business Hours -->
         <div class="settings-card" id="hours">
           <div class="card-header"><div class="card-icon"><i data-lucide="clock"></i></div><h2 class="card-title">Business Hours</h2></div>
           <div class="card-body">
@@ -1101,7 +1291,6 @@ function getSettingsPage() {
             <button class="btn btn-primary save-card-btn" onclick="saveSection('hours')"><span>Save</span></button>
           </div>
         </div>
-        <!-- FAQs -->
         <div class="settings-card" id="faqs">
           <div class="card-header"><div class="card-icon"><i data-lucide="help-circle"></i></div><h2 class="card-title">FAQs</h2></div>
           <div class="card-body">
@@ -1112,7 +1301,6 @@ function getSettingsPage() {
             <button class="btn btn-primary save-card-btn" onclick="saveSection('faqs')"><span>Save</span></button>
           </div>
         </div>
-        <!-- WhatsApp Connection -->
         <div class="settings-card" id="whatsapp">
           <div class="card-header"><div class="card-icon"><i data-lucide="smartphone"></i></div><h2 class="card-title">WhatsApp Connection</h2></div>
           <div class="card-body">
@@ -1122,7 +1310,6 @@ function getSettingsPage() {
             <button class="btn btn-primary save-card-btn" onclick="saveSection('whatsapp')"><span>Save</span></button>
           </div>
         </div>
-        <!-- Payment Settings -->
         <div class="settings-card" id="payment">
           <div class="card-header"><div class="card-icon"><i data-lucide="credit-card"></i></div><h2 class="card-title">Payment Settings</h2></div>
           <div class="card-body">
@@ -1139,7 +1326,7 @@ function getSettingsPage() {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     function initHoursGrid() {
       const grid = document.getElementById('hoursGrid');
-      grid.innerHTML = days.map(day => '<div class="hours-row"><div class="hours-day">' + day + '</div><div class="hours-toggle active" onclick="this.classList.toggle(\\'active\\')"></div><div class="hours-inputs"><input type="time" class="input" value="09:00"><span>to</span><input type="time" class="input" value="18:00"></div></div>').join('');
+      grid.innerHTML = days.map(day => '<div class="hours-row"><div class="hours-day">' + day + '</div><div class="hours-toggle active" onclick="this.classList.toggle(\'active\')"></div><div class="hours-inputs"><input type="time" class="input" value="09:00"><span>to</span><input type="time" class="input" value="18:00"></div></div>').join('');
     }
     function addServiceRow() {
       const list = document.getElementById('servicesList');
@@ -1213,18 +1400,34 @@ function getOrdersPage() {
   <title>BizChat AI - Orders</title>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <style>${sharedStyles}
-    .orders-table { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+    .orders-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+    .filter-tabs { display: flex; gap: 6px; }
+    .filter-tab { padding: 8px 18px; border-radius: 20px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); cursor: pointer; transition: all 0.18s; }
+    .filter-tab:hover { border-color: var(--accent); color: var(--accent); }
+    .filter-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .orders-count { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+    .orders-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
     table { width: 100%; border-collapse: collapse; }
     thead { background: var(--bg); }
-    th { padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
-    td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid var(--border); }
-    tr:hover { background: var(--bg); }
-    .status-select { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; border: none; cursor: pointer; }
-    .status-select.new { background: rgba(249,115,22,0.1); color: var(--accent-orange); }
-    .status-select.confirmed { background: rgba(59,130,246,0.1); color: var(--accent-blue); }
-    .status-select.completed { background: rgba(22,163,74,0.1); color: var(--success); }
-    .status-select.cancelled { background: rgba(220,38,38,0.1); color: var(--error); }
-    @media (max-width: 768px) { .orders-table { overflow-x: auto; display: block; } }
+    th { padding: 13px 16px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tbody tr { cursor: pointer; transition: background 0.15s; }
+    tbody tr:hover { background: var(--bg); }
+    tbody tr:last-child td { border-bottom: none; }
+    .customer-phone { font-weight: 600; color: var(--text-primary); font-size: 14px; }
+    .order-details-cell { max-width: 300px; color: var(--text-secondary); font-size: 13px; }
+    .time-cell { color: var(--text-muted); font-size: 13px; white-space: nowrap; }
+    .status-select { padding: 6px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; outline: none; -webkit-appearance: none; appearance: none; text-align: center; }
+    .status-select.new { background: rgba(249,115,22,0.12); color: #ea6a00; }
+    .status-select.confirmed { background: rgba(59,130,246,0.12); color: #2563eb; }
+    .status-select.completed { background: rgba(22,163,74,0.12); color: #15803d; }
+    .status-select.cancelled { background: rgba(220,38,38,0.12); color: #dc2626; }
+    .empty-orders { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; text-align: center; gap: 12px; }
+    .empty-orders-icon { color: var(--text-light); margin-bottom: 4px; }
+    .empty-orders-title { font-size: 17px; font-weight: 700; color: var(--text-primary); }
+    .empty-orders-text { font-size: 14px; color: var(--text-muted); max-width: 340px; line-height: 1.6; }
+    @media (max-width: 900px) { .orders-table-wrap { overflow-x: auto; display: block; } }
+    @media (max-width: 768px) { .filter-tabs { flex-wrap: wrap; } }
   </style>
 </head>
 <body>
@@ -1232,13 +1435,123 @@ function getOrdersPage() {
   <div class="main-content">
     <div class="top-bar"><h1 class="page-title">Orders</h1></div>
     <div class="container">
-      <div id="ordersContent"></div>
+      <div class="orders-header">
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">All</button>
+          <button class="filter-tab" data-filter="new">New</button>
+          <button class="filter-tab" data-filter="confirmed">Confirmed</button>
+          <button class="filter-tab" data-filter="completed">Completed</button>
+        </div>
+        <div class="orders-count" id="ordersCount"></div>
+      </div>
+      <div class="orders-table-wrap" id="ordersTableWrap"></div>
     </div>
   </div>
   <div id="toast" class="toast"></div>
   <script>
     lucide.createIcons();
-    function showToast(message, type = 'success') { const toast = document.getElementById('toast'); toast.textContent = message; toast.className = 'toast show ' + type; setTimeout(() => { toast.className = 'toast'; }, 3000); }
+    let allOrders = [];
+    let activeFilter = 'all';
+
+    function showToast(message, type) {
+      type = type || 'success';
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast show ' + type;
+      setTimeout(() => { toast.className = 'toast'; }, 3000);
+    }
+
+    function escapeHtml(t) {
+      if (!t) return '';
+      const d = document.createElement('div');
+      d.textContent = t;
+      return d.innerHTML;
+    }
+
+    function formatTime(ts) {
+      if (!ts) return '\u2014';
+      const d = new Date(ts);
+      const now = new Date();
+      const diff = Math.floor((now - d) / 1000);
+      if (diff < 60) return 'Just now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return d.toLocaleDateString('en-PK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderOrders() {
+      const wrap = document.getElementById('ordersTableWrap');
+      const filtered = activeFilter === 'all' ? allOrders : allOrders.filter(o => o.status === activeFilter);
+      document.getElementById('ordersCount').textContent = filtered.length + ' order' + (filtered.length !== 1 ? 's' : '');
+
+      if (filtered.length === 0) {
+        wrap.innerHTML = '<div class="empty-orders">'
+          + '<div class="empty-orders-icon"><svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>'
+          + '<div class="empty-orders-title">' + (activeFilter === 'all' ? 'No orders yet' : 'No ' + activeFilter + ' orders') + '</div>'
+          + '<div class="empty-orders-text">When customers place orders via WhatsApp, they\'ll appear here automatically.</div>'
+          + '</div>';
+        return;
+      }
+
+      const rows = filtered.map(order => {
+        const statusClass = order.status || 'new';
+        const statusOptions = ['new', 'confirmed', 'completed', 'cancelled'];
+        const selectOpts = statusOptions.map(s => '<option value="' + s + '"' + (order.status === s ? ' selected' : '') + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>').join('');
+        const selectHtml = '<select class="status-select ' + statusClass + '" data-prev="' + statusClass + '" onchange="updateStatus(' + order.id + ', this)" onclick="event.stopPropagation()">' + selectOpts + '</select>';
+        const datetime = order.requested_datetime ? '<br><span style="font-size:11px;color:var(--text-muted);">&#128197; ' + escapeHtml(order.requested_datetime) + '</span>' : '';
+        return '<tr onclick="viewConversation(' + order.conversation_id + ')">'
+          + '<td class="time-cell">' + formatTime(order.created_at) + '</td>'
+          + '<td><span class="customer-phone">' + escapeHtml(order.customer_phone) + '</span></td>'
+          + '<td class="order-details-cell">' + escapeHtml(order.order_details) + datetime + '</td>'
+          + '<td>' + selectHtml + '</td>'
+          + '<td style="color:var(--text-muted);font-size:13px;"><i data-lucide="chevron-right" style="width:16px;height:16px;"></i></td>'
+          + '</tr>';
+      }).join('');
+
+      wrap.innerHTML = '<table>'
+        + '<thead><tr><th>Time</th><th>Customer</th><th>Order Details</th><th>Status</th><th></th></tr></thead>'
+        + '<tbody>' + rows + '</tbody>'
+        + '</table>';
+      lucide.createIcons();
+    }
+
+    function viewConversation(conversationId) {
+      if (conversationId) window.location = '/conversations/' + conversationId;
+    }
+
+    async function updateStatus(orderId, selectEl) {
+      const newStatus = selectEl.value;
+      const oldStatus = selectEl.dataset.prev || newStatus;
+      selectEl.className = 'status-select ' + newStatus;
+      try {
+        const res = await fetch('/api/orders/' + orderId + '/status', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        if (!res.ok) throw new Error('Server error');
+        selectEl.dataset.prev = newStatus;
+        const order = allOrders.find(o => o.id === orderId);
+        if (order) order.status = newStatus;
+        showToast('Status updated to ' + newStatus);
+        if (activeFilter !== 'all' && activeFilter !== newStatus) renderOrders();
+      } catch (err) {
+        showToast('Failed to update status', 'error');
+        selectEl.value = oldStatus;
+        selectEl.className = 'status-select ' + oldStatus;
+        selectEl.dataset.prev = oldStatus;
+      }
+    }
+
+    document.querySelectorAll('.filter-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeFilter = tab.dataset.filter;
+        renderOrders();
+      });
+    });
+
     async function loadOrders() {
       try {
         const meRes = await fetch('/api/auth/me');
@@ -1246,10 +1559,11 @@ function getOrdersPage() {
         const me = await meRes.json();
         document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
         document.getElementById('userAvatar').textContent = (me.shop_name || 'B').charAt(0).toUpperCase();
-        const content = document.getElementById('ordersContent');
-        content.innerHTML = '<div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><div class="empty-state-title">No orders yet</div><div class="empty-state-text">When customers place orders via WhatsApp, they will appear here.</div><a href="/settings" class="btn btn-secondary" style="margin-top:16px;">Configure Order Settings</a></div>';
+        allOrders = await fetch('/api/orders').then(r => r.json());
+        renderOrders();
       } catch (err) { console.error(err); }
     }
+
     async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location = '/login'; }
     loadOrders();
   </script>
@@ -1308,17 +1622,15 @@ function getAnalyticsPage() {
         document.getElementById('totalConv').textContent = data.totalConversations || 0;
         document.getElementById('totalMsg').textContent = data.totalMessages || 0;
         document.getElementById('avgPerDay').textContent = (data.averagePerDay || 0).toFixed(1);
-        // Messages chart
-        const labels = data.messagesLast7Days?.map(d => new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' })) || [];
-        const values = data.messagesLast7Days?.map(d => d.count) || [];
+        const labels = (data.messagesLast7Days || []).map(d => new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' }));
+        const values = (data.messagesLast7Days || []).map(d => d.count);
         new Chart(document.getElementById('messagesChart'), {
           type: 'bar',
           data: { labels, datasets: [{ label: 'Messages', data: values, backgroundColor: 'rgba(20, 184, 166, 0.8)', borderRadius: 4 }] },
           options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
         });
-        // Questions chart
-        const qLabels = data.topQuestions?.map(q => q.keyword) || [];
-        const qValues = data.topQuestions?.map(q => q.count) || [];
+        const qLabels = (data.topQuestions || []).map(q => q.keyword);
+        const qValues = (data.topQuestions || []).map(q => q.count);
         new Chart(document.getElementById('questionsChart'), {
           type: 'doughnut',
           data: { labels: qLabels, datasets: [{ data: qValues, backgroundColor: ['#14b8a6', '#3b82f6', '#f97316', '#22c55e', '#a855f7'] }] },
@@ -1336,10 +1648,13 @@ function getAnalyticsPage() {
 // Start server
 async function startServer() {
   await createTables();
-  await findDuplicateWhatsAppPhoneIds().catch(() => {});
-  app.listen(PORT, () => {
+  await findDuplicateWhatsAppPhoneIds().catch(function() {});
+  app.listen(PORT, '0.0.0.0', function() {
     console.log('BizChat AI server running on port ' + PORT);
   });
+  // Start follow-up scheduler — runs every 10 minutes
+  setInterval(runFollowUpScheduler, 10 * 60 * 1000);
+  console.log('Follow-up scheduler started (runs every 10 minutes)');
 }
 
 startServer();
