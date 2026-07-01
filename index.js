@@ -292,7 +292,7 @@ async function notifyOwner(owner_whatsapp, notification_type, customer_phone, me
     messageText = `👤 Human Handoff Required - BizChat AI\nCustomer: ${customer_phone}\nThey said: ${message_details}\nStatus: Customer wants to speak to a real person\n👉 Contact them directly as soon as possible.`;
   }
   if (!messageText) return;
-  await sendWhatsAppMessage('', phoneNumberId, normalizedOwnerNumber, messageText);
+  await sendWhatsAppMessage('', process.env.WHATSAPP_PHONE_NUMBER_ID, normalizedOwnerNumber, messageText);
 }
 
 // ============================================
