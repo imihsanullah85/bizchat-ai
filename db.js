@@ -30,6 +30,7 @@ async function createTables() {
         faqs TEXT,
         whatsapp_number VARCHAR(255),
         whatsapp_phone_id VARCHAR(255),
+        owner_whatsapp VARCHAR(20),
         payment_link VARCHAR(255),
         category VARCHAR(255),
         monthly_fee INTEGER,
@@ -40,6 +41,10 @@ async function createTables() {
     // Add category column to existing databases that were created before this column existed
     await client.query(`
       ALTER TABLE businesses ADD COLUMN IF NOT EXISTS category VARCHAR(255);
+    `);
+
+    await client.query(`
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS owner_whatsapp VARCHAR(20);
     `);
 
     await client.query(`

@@ -160,6 +160,15 @@ async function handleWhatsAppMessage(msg, value) {
 
   const conversation = await ensureConversation(business.id, customerPhone, customerName);
   await insertMessage(conversation.id, 'in', messageText);
+
+  const notificationType = detectOwnerNotificationType(messageText);
+  if (notificationType) {
+    const customerAutoReply = "Thanks for reaching out! I've notified our team and someone will get back to you shortly. In the meantime, is there anything else I can help you with?";
+    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, customerAutoReply);
+    await insertMessage(conversation.id, 'out', customerAutoReply);
+    await notifyOwner(business.owner_whatsapp, notificationType, customerPhone, messageText);
+  }
+
   const aiResponse = await generateAIResponse(business, messageText);
   await insertMessage(conversation.id, 'out', aiResponse);
   await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, aiResponse);
@@ -238,6 +247,31 @@ async function sendWhatsAppMessage(whatsappNumber, phoneId, to, text) {
   } catch (error) { console.error('WhatsApp send error:', error); }
 }
 
+function detectOwnerNotificationType(messageText) {
+  const text = (messageText || '').toLowerCase();
+  const orderKeywords = ['order', 'book', 'appointment', 'buy', 'purchase', 'i want', 'i need', "i'll take", 'how do i pay', 'payment', 'reserve', 'confirm'];
+  const attentionKeywords = ['not working', 'problem', 'issue', 'complaint', 'wrong', 'bad', 'disappointed', 'refund', 'cancel', 'not happy', 'i am angry'];
+  const humanKeywords = ['speak to human', 'talk to owner', 'real person', 'manager', 'call me', 'phone number', 'speak to someone'];
+  if (orderKeywords.some(keyword => text.includes(keyword))) return 'order';
+  if (attentionKeywords.some(keyword => text.includes(keyword))) return 'attention';
+  if (humanKeywords.some(keyword => text.includes(keyword))) return 'human';
+  return null;
+}
+
+async function notifyOwner(owner_whatsapp, notification_type, customer_phone, message_details) {
+  if (!owner_whatsapp) return;
+  let messageText = '';
+  if (notification_type === 'order') {
+    messageText = `🛒 New Order Alert - BizChat AI\nCustomer: ${customer_phone}\nThey said: ${message_details}\nStatus: Interested in placing an order\n👉 Reply to them now on WhatsApp to close the sale!`;
+  } else if (notification_type === 'attention') {
+    messageText = `⚠️ Customer Needs Attention - BizChat AI\nCustomer: ${customer_phone}\nThey said: ${message_details}\nStatus: May need personal response\n👉 Check this conversation on your dashboard now.`;
+  } else if (notification_type === 'human') {
+    messageText = `👤 Human Handoff Required - BizChat AI\nCustomer: ${customer_phone}\nThey said: ${message_details}\nStatus: Customer wants to speak to a real person\n👉 Contact them directly as soon as possible.`;
+  }
+  if (!messageText) return;
+  await sendWhatsAppMessage('', process.env.WHATSAPP_PHONE_ID, owner_whatsapp, messageText);
+}
+
 // ============================================
 // AUTH ROUTES
 // ============================================
@@ -286,7 +320,7 @@ app.get('/api/validate/tenant-data', requireAuth, async (req, res) => {
 
 app.put('/api/business', requireAuth, async (req, res) => {
   const updates = {};
-  ['shop_name', 'description', 'services', 'prices', 'timings', 'faqs', 'whatsapp_number', 'whatsapp_phone_id', 'payment_link', 'category', 'services_list', 'business_hours'].forEach((key) => {
+  ['shop_name', 'description', 'services', 'prices', 'timings', 'faqs', 'whatsapp_number', 'whatsapp_phone_id', 'owner_whatsapp', 'payment_link', 'category', 'services_list', 'business_hours'].forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(req.body, key)) updates[key] = req.body[key];
   });
   if (!Object.keys(updates).length) return res.status(400).json({ success: false, error: 'No update fields provided' });
@@ -1149,6 +1183,14 @@ function getSettingsPage() {
             <button class="btn btn-primary save-card-btn" onclick="saveSection('whatsapp')"><span>Save</span></button>
           </div>
         </div>
+        <!-- Owner Notifications -->
+        <div class="settings-card" id="notifications">
+          <div class="card-header"><div class="card-icon"><i data-lucide="bell"></i></div><h2 class="card-title">Owner Notifications</h2></div>
+          <div class="card-body">
+            <div class="form-group"><label class="form-label">Your Personal WhatsApp Number</label><input type="text" class="input" id="owner_whatsapp" placeholder="e.g., +923001234567"><p class="form-hint">You will receive instant alerts on this number when customers place orders or need attention.</p></div>
+            <button class="btn btn-primary save-card-btn" onclick="saveSection('notifications')"><span>Save</span></button>
+          </div>
+        </div>
         <!-- Payment Settings -->
         <div class="settings-card" id="payment">
           <div class="card-header"><div class="card-icon"><i data-lucide="credit-card"></i></div><h2 class="card-title">Payment Settings</h2></div>
@@ -1197,6 +1239,7 @@ function getSettingsPage() {
       else if (section === 'hours') { data.timings = 'Mon-Sat 9am-6pm'; }
       else if (section === 'faqs') { const questions = document.querySelectorAll('input[name="faqQuestion[]"]'); const answers = document.querySelectorAll('input[name="faqAnswer[]"]'); data.faqs = Array.from(questions).map((q, i) => 'Q: ' + q.value + ' A: ' + answers[i].value).filter(f => f.trim().length > 5).join('\\n'); }
       else if (section === 'whatsapp') { data.whatsapp_number = document.getElementById('whatsapp_number').value; data.whatsapp_phone_id = document.getElementById('whatsapp_phone_id').value; }
+      else if (section === 'notifications') { data.owner_whatsapp = document.getElementById('owner_whatsapp').value; }
       else if (section === 'payment') { data.payment_link = document.getElementById('payment_link').value; }
       try {
         const res = await fetch('/api/business', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
@@ -1217,6 +1260,7 @@ function getSettingsPage() {
         document.getElementById('category').value = data.category || '';
         document.getElementById('whatsapp_number').value = data.whatsapp_number || '';
         document.getElementById('whatsapp_phone_id').value = data.whatsapp_phone_id || '';
+        document.getElementById('owner_whatsapp').value = data.owner_whatsapp || '';
         document.getElementById('payment_link').value = data.payment_link || '';
         const statusDot = document.getElementById('whatsappStatusDot');
         const statusText = document.getElementById('whatsappStatusText');
