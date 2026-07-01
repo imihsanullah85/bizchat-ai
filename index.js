@@ -163,6 +163,7 @@ async function handleWhatsAppMessage(msg, value) {
 
   const notificationType = detectOwnerNotificationType(messageText);
   if (notificationType) {
+    console.log('Owner notification triggered');
     const customerAutoReply = "Thanks for reaching out! I've notified our team and someone will get back to you shortly. In the meantime, is there anything else I can help you with?";
     await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, customerAutoReply);
     await insertMessage(conversation.id, 'out', customerAutoReply);
@@ -239,12 +240,22 @@ async function sendWhatsAppMessage(whatsappNumber, phoneId, to, text) {
   const token = process.env.WHATSAPP_TOKEN;
   if (!token || !phoneId) { console.log('WhatsApp credentials not configured'); return; }
   try {
-    await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
+    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneId}/messages`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text', text: { body: text } })
     });
+    const responseText = await response.text();
+    console.log('Meta WhatsApp API response:', responseText);
   } catch (error) { console.error('WhatsApp send error:', error); }
+}
+
+function normalizeOwnerWhatsAppNumber(value) {
+  if (!value) return '';
+  const digits = String(value).replace(/[^\d]/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0')) return `92${digits.slice(1)}`;
+  return digits;
 }
 
 function detectOwnerNotificationType(messageText) {
@@ -259,7 +270,14 @@ function detectOwnerNotificationType(messageText) {
 }
 
 async function notifyOwner(owner_whatsapp, notification_type, customer_phone, message_details) {
-  if (!owner_whatsapp) return;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_ID || '';
+  const normalizedOwnerNumber = normalizeOwnerWhatsAppNumber(owner_whatsapp);
+  console.log('Owner notification target number:', normalizedOwnerNumber);
+  console.log('Owner notification WHATSAPP_PHONE_NUMBER_ID:', phoneNumberId);
+  if (!normalizedOwnerNumber || !phoneNumberId) {
+    console.log('Owner notification skipped: missing owner number or phone ID');
+    return;
+  }
   let messageText = '';
   if (notification_type === 'order') {
     messageText = `🛒 New Order Alert - BizChat AI\nCustomer: ${customer_phone}\nThey said: ${message_details}\nStatus: Interested in placing an order\n👉 Reply to them now on WhatsApp to close the sale!`;
@@ -269,7 +287,7 @@ async function notifyOwner(owner_whatsapp, notification_type, customer_phone, me
     messageText = `👤 Human Handoff Required - BizChat AI\nCustomer: ${customer_phone}\nThey said: ${message_details}\nStatus: Customer wants to speak to a real person\n👉 Contact them directly as soon as possible.`;
   }
   if (!messageText) return;
-  await sendWhatsAppMessage('', process.env.WHATSAPP_PHONE_ID, owner_whatsapp, messageText);
+  await sendWhatsAppMessage('', phoneNumberId, normalizedOwnerNumber, messageText);
 }
 
 // ============================================
