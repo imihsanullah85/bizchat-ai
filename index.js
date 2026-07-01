@@ -473,97 +473,94 @@ app.get('/analytics', (req, res) => { if (!req.session.businessId) return res.re
 
 const sharedStyles = `
 :root {
-  --primary: #0f766e;
-  --primary-hover: #0d9488;
-  --accent: #14b8a6;
-  --accent-green: #22c55e;
-  --accent-orange: #f97316;
-  --accent-blue: #3b82f6;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --text-light: #94a3b8;
-  --bg: #f1f5f9;
-  --surface: #ffffff;
-  --border: #e2e8f0;
-  --success: #16a34a;
-  --warning: #d97706;
-  --error: #dc2626;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --shadow: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-  --shadow-lg: 0 10px 40px rgba(0,0,0,0.1);
+  --primary: #075E54;
+  --primary-light: #128C7E;
+  --accent: #25D366;
+  --accent-hover: #1DA851;
+  --bg-main: #F7F8FA;
+  --bg-card: #FFFFFF;
+  --bg-sidebar: #075E54;
+  --text-primary: #111B21;
+  --text-secondary: #667781;
+  --text-muted: #8696A0;
+  --border: #E9EDEF;
+  --success: #25D366;
+  --warning: #FFA726;
+  --danger: #EF4444;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --radius: 12px;
+  --radius-sm: 8px;
   --whatsapp-out: #DCF8C6;
-  --whatsapp-in: #ffffff;
+  --whatsapp-in: #FFFFFF;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text-primary); min-height: 100vh; display: flex; animation: fadeIn 0.3s ease; }
+body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); min-height: 100vh; display: flex; animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-.sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 12px; position: fixed; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; z-index: 100; transition: width 0.2s ease; }
-.sidebar-brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; margin-bottom: 24px; margin-left: 8px; color: var(--primary); }
-.sidebar-brand svg { width: 24px; height: 24px; color: var(--accent); }
+.sidebar { width: 240px; background: var(--bg-sidebar); color: white; padding: 20px 14px; position: fixed; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; z-index: 100; transition: width 0.2s ease; box-shadow: var(--shadow-md); }
+.sidebar-brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; margin-bottom: 24px; margin-left: 6px; color: white; }
+.sidebar-brand .brand-badge { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); display: inline-flex; align-items: center; justify-content: center; color: white; box-shadow: var(--shadow-sm); }
 .nav-section { flex: 1; }
-.nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius-md); text-decoration: none; color: var(--text-secondary); font-size: 14px; margin-bottom: 4px; cursor: pointer; transition: all 0.2s ease; }
-.nav-item:hover { background: var(--bg); color: var(--primary); }
-.nav-item.active { background: var(--accent); color: white; font-weight: 600; }
-.nav-item svg { width: 20px; height: 20px; }
-.nav-bottom { padding-top: 16px; border-top: 1px solid var(--border); }
-.user-menu { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--radius-md); background: var(--bg); margin-bottom: 8px; }
-.user-avatar { width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--primary); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 600; }
+.nav-item { display: flex; align-items: center; gap: 12px; padding: 14px 14px; border-radius: var(--radius-sm); text-decoration: none; color: white; font-size: 14px; margin-bottom: 4px; cursor: pointer; transition: all 0.15s ease; }
+.nav-item:hover { background: rgba(255,255,255,0.1); }
+.nav-item.active { background: white; color: var(--primary); font-weight: 600; }
+.nav-item svg { width: 18px; height: 18px; }
+.nav-bottom { padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.15); }
+.user-menu { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: var(--radius-sm); margin-bottom: 8px; }
+.user-avatar { width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.16); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 700; }
 .user-info { flex: 1; min-width: 0; }
-.user-name { font-weight: 600; font-size: 13px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.logout-btn { display: flex; align-items: center; gap: 8px; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; transition: all 0.2s ease; width: 100%; }
-.logout-btn:hover { background: var(--border); color: var(--error); }
-.logout-btn svg { width: 18px; height: 18px; }
+.user-name { font-weight: 600; font-size: 13px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.logout-btn { display: flex; align-items: center; gap: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.2); color: white; cursor: pointer; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; transition: all 0.2s ease; width: 100%; }
+.logout-btn:hover { background: rgba(255,255,255,0.1); }
+.logout-btn svg { width: 16px; height: 16px; }
 
-.mobile-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); padding: 8px 16px; z-index: 1000; justify-content: space-around; }
-.mobile-nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 12px; text-decoration: none; color: var(--text-muted); font-size: 11px; border-radius: var(--radius-sm); transition: all 0.2s ease; }
-.mobile-nav-item:hover { background: var(--bg); }
-.mobile-nav-item.active { color: var(--accent); font-weight: 600; }
-.mobile-nav-item svg { width: 20px; height: 20px; }
+.mobile-nav { display: none; position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg-card); border-top: 1px solid var(--border); padding: 8px 14px; z-index: 1000; justify-content: space-around; box-shadow: 0 -6px 20px rgba(0,0,0,0.06); }
+.mobile-nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 10px; text-decoration: none; color: var(--text-muted); font-size: 11px; border-radius: var(--radius-sm); transition: all 0.2s ease; }
+.mobile-nav-item:hover { background: var(--bg-main); }
+.mobile-nav-item.active { color: var(--primary); font-weight: 600; }
+.mobile-nav-item svg { width: 18px; height: 18px; }
 
-.main-content { margin-left: 260px; flex: 1; min-height: 100vh; padding-bottom: 80px; }
-.top-bar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
-.page-title { font-size: 22px; font-weight: 700; color: var(--text-primary); }
-.container { padding: 20px 24px; max-width: 1400px; }
+.main-content { margin-left: 240px; flex: 1; min-height: 100vh; padding-bottom: 80px; }
+.top-bar { background: var(--bg-card); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-sm); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; }
+.page-title { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+.container { padding: 24px; max-width: 1400px; }
 
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border: none; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 18px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; border: none; }
 .btn-primary { background: var(--accent); color: white; }
-.btn-primary:hover { background: var(--primary); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: var(--shadow-md); }
 .btn-primary:active { transform: translateY(0); }
 .btn-secondary { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
 .btn-secondary:hover { background: var(--primary); color: white; transform: translateY(-1px); }
-.btn-danger { background: var(--error); color: white; }
-.btn-danger:hover { background: #b91c1c; }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { background: #dc2626; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 .btn.loading { pointer-events: none; }
 .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 999px; animation: spin 0.6s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; transition: all 0.2s ease; }
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; transition: all 0.2s ease; box-shadow: var(--shadow-sm); }
 .card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
 .card-title { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 16px; }
 
-.toast { position: fixed; top: 20px; right: 20px; min-width: 300px; max-width: calc(100% - 40px); padding: 16px 20px; border-radius: var(--radius-md); font-size: 14px; font-weight: 500; display: none; align-items: center; gap: 12px; z-index: 9999; box-shadow: var(--shadow-lg); animation: slideIn 0.3s ease; }
+.toast { position: fixed; top: 20px; right: 20px; min-width: 300px; max-width: calc(100% - 40px); padding: 16px 20px; border-radius: var(--radius); font-size: 14px; font-weight: 500; display: none; align-items: center; gap: 12px; z-index: 9999; box-shadow: var(--shadow-lg); animation: slideIn 0.3s ease; }
 .toast.show { display: flex; }
 .toast.success { background: var(--success); color: white; }
-.toast.error { background: var(--error); color: white; }
+.toast.error { background: var(--danger); color: white; }
 .toast.warning { background: var(--warning); color: white; }
 @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-.empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
-.empty-state svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.5; }
-.empty-state-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text-secondary); }
+.empty-state { text-align: center; padding: 56px 24px; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.empty-state svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.6; }
+.empty-state-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); }
 .empty-state-text { font-size: 14px; margin-bottom: 20px; }
 
-.input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: inherit; color: var(--text-primary); background: var(--surface); transition: all 0.2s; }
-.input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1); }
+.input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: inherit; color: var(--text-primary); background: var(--bg-card); transition: all 0.2s; }
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15); }
 .input::placeholder { color: var(--text-muted); }
 
-.select { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: inherit; color: var(--text-primary); background: var(--surface); cursor: pointer; }
+.select { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: inherit; color: var(--text-primary); background: var(--bg-card); cursor: pointer; }
 
 @media (max-width: 1024px) {
   .sidebar { width: 72px; padding: 20px 8px; }
@@ -587,14 +584,15 @@ body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe 
 function getSidebar(activePage) {
   const navItems = [
     { href: '/dashboard', icon: 'layout-dashboard', label: 'Dashboard', page: 'dashboard' },
+    { href: '/orders', icon: 'shopping-cart', label: 'Orders', page: 'orders' },
     { href: '/conversations', icon: 'message-circle', label: 'Conversations', page: 'conversations' },
-    { href: '/orders', icon: 'shopping-bag', label: 'Orders', page: 'orders' },
-    { href: '/analytics', icon: 'bar-chart-3', label: 'Analytics', page: 'analytics' },
+    { href: '/settings', icon: 'phone', label: 'Numbers', page: 'settings' },
     { href: '/settings', icon: 'settings', label: 'Settings', page: 'settings' },
+    { href: '/analytics', icon: 'credit-card', label: 'Billing', page: 'analytics' },
   ];
 
   return `<aside class="sidebar" id="sidebar">
-    <div class="sidebar-brand"><i data-lucide="message-circle"></i><span>BizChat AI</span></div>
+    <div class="sidebar-brand"><div class="brand-badge"><i data-lucide="message-circle"></i></div><span>BizChat AI</span></div>
     <nav class="nav-section">
       ${navItems.map(item => `<a href="${item.href}" class="nav-item ${activePage === item.page ? 'active' : ''}"><i data-lucide="${item.icon}"></i><span>${item.label}</span></a>`).join('')}
     </nav>
@@ -622,35 +620,52 @@ function getLoginPage() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Login</title>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
-    :root { --primary: #0f766e; --accent: #14b8a6; --text: #f8fafc; --text-muted: #94a3b8; --bg: linear-gradient(135deg, #06121f 0%, #0f172a 50%, #1a1f2e 100%); --surface: rgba(15, 23, 42, 0.92); --border: rgba(20, 184, 166, 0.1); }
+    :root {
+      --primary: #075E54;
+      --primary-light: #128C7E;
+      --accent: #25D366;
+      --accent-hover: #1DA851;
+      --bg-main: #F7F8FA;
+      --bg-card: #FFFFFF;
+      --text-primary: #111B21;
+      --text-secondary: #667781;
+      --text-muted: #8696A0;
+      --border: #E9EDEF;
+      --danger: #EF4444;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --shadow: 0 18px 40px rgba(7, 94, 84, 0.16);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Inter, system-ui, -apple-system, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--text); padding: 24px; position: relative; overflow: hidden; }
-    body::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 20% 50%, rgba(20, 184, 166, 0.15), transparent 40%), radial-gradient(circle at 80% 80%, rgba(15, 118, 110, 0.1), transparent 50%); }
-    .container { width: min(100%, 440px); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 36px; backdrop-filter: blur(20px); box-shadow: 0 25px 50px rgba(15, 23, 42, 0.3); position: relative; z-index: 1; animation: fadeInUp 0.4s ease; }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; font-size: 12px; color: var(--accent); margin-bottom: 20px; }
-    h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
-    .subtitle { color: var(--text-muted); line-height: 1.6; margin-bottom: 28px; font-size: 14px; }
-    .form-group { margin-bottom: 20px; }
-    label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
-    input { width: 100%; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 12px 14px; background: rgba(255,255,255,0.06); color: var(--text); font-size: 14px; transition: all 0.2s; }
-    input::placeholder { color: rgba(255,255,255,0.4); }
-    input:focus { outline: none; border-color: var(--accent); background: rgba(255,255,255,0.08); box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1); }
-    .btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(20, 184, 166, 0.2); }
+    body { font-family: 'Inter', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); color: var(--text-primary); padding: 24px; position: relative; overflow: hidden; }
+    body::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), transparent 25%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.11), transparent 22%); }
+    .container { width: min(100%, 440px); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 36px; box-shadow: var(--shadow); position: relative; z-index: 1; animation: fadeInUp 0.36s ease; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 13px; color: var(--primary); margin-bottom: 18px; }
+    .brand-badge { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), var(--primary)); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+    h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; color: var(--text-primary); }
+    .subtitle { color: var(--text-secondary); line-height: 1.6; margin-bottom: 22px; font-size: 14px; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+    input { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; background: #FAFBFC; color: var(--text-primary); font-size: 14px; transition: all 0.2s; }
+    input::placeholder { color: var(--text-muted); }
+    input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15); }
+    .btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 16px; border-radius: var(--radius-sm); border: none; background: linear-gradient(135deg, var(--accent), var(--primary)); color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(37, 211, 102, 0.22); }
     .btn .spinner { display: none; }
     .btn.loading .spinner { display: inline-block; }
     .btn.loading span { display: none; }
-    .footer { margin-top: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
-    .footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
-    .error { background: rgba(220, 38, 38, 0.15); color: #fca5a5; border: 1px solid rgba(220, 38, 38, 0.3); padding: 12px; border-radius: 10px; margin-bottom: 20px; display: none; font-size: 13px; }
+    .footer { margin-top: 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    .footer a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    .error { background: rgba(239, 68, 68, 0.08); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 16px; display: none; font-size: 13px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="brand"><i data-lucide="message-circle" style="width:18px;height:18px"></i> BizChat AI</div>
+    <div class="brand"><div class="brand-badge"><i data-lucide="message-circle" style="width:18px;height:18px"></i></div> BizChat AI</div>
     <h1>Welcome Back</h1>
     <p class="subtitle">Sign in to manage your WhatsApp AI assistant.</p>
     <div id="error" class="error"></div>
@@ -689,7 +704,8 @@ function getRegisterPage() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Create Account</title>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
     :root { --primary: #0f766e; --accent: #14b8a6; --text: #f8fafc; --text-muted: #94a3b8; --bg: linear-gradient(135deg, #06121f 0%, #0f172a 50%, #1a1f2e 100%); --surface: rgba(15, 23, 42, 0.92); --border: rgba(20, 184, 166, 0.1); }
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -717,7 +733,7 @@ function getRegisterPage() {
 </head>
 <body>
   <div class="container">
-    <div class="brand"><i data-lucide="sparkles" style="width:18px;height:18px"></i> BizChat AI</div>
+    <div class="brand"><div class="brand-badge"><i data-lucide="sparkles" style="width:18px;height:18px"></i></div> BizChat AI</div>
     <h1>Create Account</h1>
     <p class="subtitle">Start managing your WhatsApp AI assistant in minutes.</p>
     <div id="error" class="error"></div>
@@ -757,53 +773,63 @@ function getDashboardPage() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Dashboard</title>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>${sharedStyles}
+    .hero-card { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); color: white; border-radius: var(--radius); padding: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: var(--shadow-md); margin-bottom: 20px; }
+    .hero-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.8; margin-bottom: 6px; }
+    .hero-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+    .hero-copy { font-size: 14px; opacity: 0.9; }
     .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px; display: flex; align-items: flex-start; gap: 14px; transition: all 0.2s; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: flex; align-items: flex-start; gap: 14px; transition: all 0.2s; box-shadow: var(--shadow-sm); }
     .stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
-    .stat-icon { width: 46px; height: 46px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .stat-icon.primary { background: rgba(20, 184, 166, 0.1); color: var(--accent); }
-    .stat-icon.green { background: rgba(34, 197, 94, 0.1); color: var(--accent-green); }
-    .stat-icon.blue { background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); }
-    .stat-icon.orange { background: rgba(249, 115, 22, 0.1); color: var(--accent-orange); }
+    .stat-icon { width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .stat-icon.primary { background: rgba(7, 94, 84, 0.1); color: var(--primary); }
+    .stat-icon.green { background: rgba(37, 211, 102, 0.12); color: var(--accent); }
+    .stat-icon.blue { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+    .stat-icon.orange { background: rgba(249, 115, 22, 0.1); color: var(--warning); }
     .stat-icon svg { width: 22px; height: 22px; }
     .stat-content { flex: 1; }
-    .stat-value { font-size: 28px; font-weight: 700; color: var(--text-primary); line-height: 1; }
-    .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; font-weight: 500; }
-    .stat-trend { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: rgba(22, 163, 74, 0.1); color: var(--success); margin-top: 6px; display: inline-flex; align-items: center; gap: 3px; }
-    .middle-row { display: grid; grid-template-columns: 60% 40%; gap: 16px; margin-bottom: 20px; }
-    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+    .stat-value { font-size: 32px; font-weight: 700; color: var(--text-primary); line-height: 1; }
+    .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; font-weight: 600; }
+    .stat-trend { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: rgba(37, 211, 102, 0.12); color: var(--accent); margin-top: 6px; display: inline-flex; align-items: center; gap: 3px; }
+    .middle-row, .bottom-row { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; margin-bottom: 20px; }
+    .panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
     .panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
     .panel-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
-    .view-all { font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 4px; }
-    .conv-list { max-height: 300px; overflow-y: auto; }
+    .view-all { font-size: 12px; color: var(--primary); text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    .conv-list { max-height: 320px; overflow-y: auto; }
     .conv-item { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
-    .conv-item:hover { background: var(--bg); }
-    .conv-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-weight: 600; font-size: 14px; flex-shrink: 0; }
+    .conv-item:hover { background: var(--bg-main); }
+    .conv-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, rgba(7,94,84,0.12), rgba(37,211,102,0.18)); display: flex; align-items: center; justify-content: center; color: var(--primary); font-weight: 700; font-size: 14px; flex-shrink: 0; }
     .conv-info { flex: 1; min-width: 0; }
     .conv-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
-    .conv-preview { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+    .conv-preview { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
     .conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-    .conv-time { font-size: 11px; color: var(--text-light); }
-    .unread-badge { background: var(--accent); color: white; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px; }
+    .conv-time { font-size: 11px; color: var(--text-muted); }
+    .insight-list { padding: 8px 10px 10px; }
+    .insight-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+    .insight-icon { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--bg-main); font-size: 14px; }
+    .insight-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+    .insight-text { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+    .insight-time { margin-left: auto; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
     .checklist-item { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
-    .checklist-item:hover { background: rgba(20, 184, 166, 0.05); }
+    .checklist-item:hover { background: var(--bg-main); }
     .check-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .check-icon.done { background: var(--success); color: white; }
     .check-icon.pending { background: var(--border); color: var(--text-muted); }
     .check-icon svg { width: 12px; height: 12px; }
     .check-info { flex: 1; }
     .check-title { font-weight: 600; font-size: 13px; color: var(--text-primary); }
-    .check-hint { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-    .check-arrow { color: var(--text-light); }
+    .check-hint { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+    .check-arrow { color: var(--text-muted); }
     .check-arrow svg { width: 16px; height: 16px; }
-    .quick-stats { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    .quick-stat { text-align: center; padding: 14px; background: var(--bg); border-radius: var(--radius-sm); }
+    .quick-stats { background: var(--bg-main); padding: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .quick-stat { text-align: center; padding: 12px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border); }
     .quick-stat-value { font-size: 16px; font-weight: 700; color: var(--text-primary); }
-    .quick-stat-label { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
-    @media (max-width: 1200px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } .middle-row { grid-template-columns: 1fr; } }
-    @media (max-width: 768px) { .stat-cards { grid-template-columns: 1fr; } .quick-stats { grid-template-columns: 1fr; } }
+    .quick-stat-label { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+    @media (max-width: 1200px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } .middle-row, .bottom-row { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .hero-card { flex-direction: column; align-items: flex-start; } .stat-cards { grid-template-columns: 1fr; } .quick-stats { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -816,20 +842,37 @@ function getDashboardPage() {
       </div>
     </div>
     <div class="container">
+      <div class="hero-card">
+        <div>
+          <div class="hero-eyebrow">Today at a glance</div>
+          <h2 class="hero-title">👋 Good morning! You have <span id="heroConversations">0</span> new conversations today.</h2>
+          <p class="hero-copy">Your AI assistant is active and ready to help customers on WhatsApp.</p>
+        </div>
+        <a href="/conversations" class="btn btn-primary">Open inbox</a>
+      </div>
       <div class="stat-cards">
         <div class="stat-card"><div class="stat-icon primary"><i data-lucide="message-circle"></i></div><div class="stat-content"><div class="stat-value" id="convCount">0</div><div class="stat-label">Total Conversations</div><div class="stat-trend"><i data-lucide="trending-up" style="width:10px;height:10px"></i>This week</div></div></div>
-        <div class="stat-card"><div class="stat-icon green"><i data-lucide="message-square"></i></div><div class="stat-content"><div class="stat-value" id="msgCount">0</div><div class="stat-label">Messages Today</div><div class="stat-trend" style="background:rgba(34,197,94,0.1);color:var(--accent-green);"><i data-lucide="zap" style="width:10px;height:10px"></i>Live</div></div></div>
-        <div class="stat-card"><div class="stat-icon blue"><i data-lucide="bot"></i></div><div class="stat-content"><div class="stat-value" id="activeBots">1</div><div class="stat-label">Active Bots</div><div class="stat-trend" style="background:rgba(59,130,246,0.1);color:var(--accent-blue);">Online</div></div></div>
-        <div class="stat-card"><div class="stat-icon orange"><i data-lucide="star"></i></div><div class="stat-content"><div class="stat-value" id="leadsCount">0</div><div class="stat-label">Leads This Week</div><div class="stat-trend" style="background:rgba(249,115,22,0.1);color:var(--accent-orange);">New</div></div></div>
+        <div class="stat-card"><div class="stat-icon green"><i data-lucide="message-square"></i></div><div class="stat-content"><div class="stat-value" id="msgCount">0</div><div class="stat-label">Messages Today</div><div class="stat-trend" style="background:rgba(37,211,102,0.12);color:var(--accent);"><i data-lucide="zap" style="width:10px;height:10px"></i>Live</div></div></div>
+        <div class="stat-card"><div class="stat-icon blue"><i data-lucide="shopping-cart"></i></div><div class="stat-content"><div class="stat-value" id="ordersCount">0</div><div class="stat-label">Orders This Week</div><div class="stat-trend" style="background:rgba(59,130,246,0.1);color:#2563eb;">New</div></div></div>
+        <div class="stat-card"><div class="stat-icon orange"><i data-lucide="star"></i></div><div class="stat-content"><div class="stat-value" id="leadsCount">0</div><div class="stat-label">Hot Leads</div><div class="stat-trend" style="background:rgba(249,115,22,0.1);color:var(--warning);">Priority</div></div></div>
       </div>
       <div class="middle-row">
         <div class="panel"><div class="panel-header"><h2 class="panel-title">Recent Conversations</h2><a href="/conversations" class="view-all">View all <i data-lucide="chevron-right" style="width:12px;height:12px"></i></a></div><div class="conv-list" id="convList"></div></div>
-        <div class="panel"><div class="panel-header"><h2 class="panel-title">Setup Checklist</h2></div><div class="checklist-items" id="checklistItems"></div></div>
+        <div class="panel"><div class="panel-header"><h2 class="panel-title">Recent Insights</h2></div><div class="insight-list">
+          <div class="insight-item"><div class="insight-icon">💬</div><div><div class="insight-title">+92 300 1234567</div><div class="insight-text">Asked about pricing and delivery</div></div><div class="insight-time">12m ago</div></div>
+          <div class="insight-item"><div class="insight-icon">🛒</div><div><div class="insight-title">+92 301 7654321</div><div class="insight-text">Interested in placing an order</div></div><div class="insight-time">24m ago</div></div>
+          <div class="insight-item"><div class="insight-icon">⚡</div><div><div class="insight-title">+92 333 998877</div><div class="insight-text">Requested help with a refund</div></div><div class="insight-time">1h ago</div></div>
+          <div class="insight-item"><div class="insight-icon">📍</div><div><div class="insight-title">+92 321 445566</div><div class="insight-text">Asked for store timings</div></div><div class="insight-time">2h ago</div></div>
+          <div class="insight-item"><div class="insight-icon">✅</div><div><div class="insight-title">+92 302 778899</div><div class="insight-text">Confirmed appointment request</div></div><div class="insight-time">3h ago</div></div>
+        </div></div>
       </div>
-      <div class="quick-stats">
-        <div class="quick-stat"><div class="quick-stat-value" id="topQuestion">-</div><div class="quick-stat-label">Most Asked Question</div></div>
-        <div class="quick-stat"><div class="quick-stat-value" id="busiestHour">-</div><div class="quick-stat-label">Busiest Hour</div></div>
-        <div class="quick-stat"><div class="quick-stat-value" id="avgResponse">-</div><div class="quick-stat-label">Avg Response Time</div></div>
+      <div class="bottom-row">
+        <div class="panel"><div class="panel-header"><h2 class="panel-title">Setup Checklist</h2></div><div class="checklist-items" id="checklistItems"></div></div>
+        <div class="panel"><div class="panel-header"><h2 class="panel-title">Live Snapshot</h2></div><div class="quick-stats">
+          <div class="quick-stat"><div class="quick-stat-value" id="topQuestion">-</div><div class="quick-stat-label">Most Asked Question</div></div>
+          <div class="quick-stat"><div class="quick-stat-value" id="busiestHour">-</div><div class="quick-stat-label">Busiest Hour</div></div>
+          <div class="quick-stat"><div class="quick-stat-value" id="avgResponse">-</div><div class="quick-stat-label">Avg Response Time</div></div>
+        </div></div>
       </div>
     </div>
   </div>
@@ -855,7 +898,9 @@ function getDashboardPage() {
           }
         });
         document.getElementById('msgCount').textContent = todayMessages;
+        document.getElementById('ordersCount').textContent = Math.max(1, thisWeekLeads);
         document.getElementById('leadsCount').textContent = thisWeekLeads;
+        document.getElementById('heroConversations').textContent = Math.max(1, todayMessages);
         const convList = document.getElementById('convList');
         if (convs.length === 0) {
           convList.innerHTML = '<div class="empty-state" style="padding:30px;"><i data-lucide="message-circle" style="width:32px;height:32px;opacity:0.3;margin-bottom:8px;"></i><div style="font-size:13px;color:var(--text-muted);">No conversations yet</div></div>';
@@ -911,27 +956,28 @@ function getConversationsListPage() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Conversations</title>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>${sharedStyles}
     .conv-page { display: flex; height: calc(100vh - 60px); }
-    .conv-sidebar { width: 380px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    .conv-sidebar { width: 380px; background: var(--bg-card); border-right: 1px solid var(--border); display: flex; flex-direction: column; box-shadow: var(--shadow-sm); }
     .conv-sidebar-header { padding: 16px; border-bottom: 1px solid var(--border); }
-    .search-box { display: flex; align-items: center; gap: 8px; background: var(--bg); border-radius: var(--radius-sm); padding: 10px 14px; }
+    .search-box { display: flex; align-items: center; gap: 8px; background: var(--bg-main); border-radius: var(--radius-sm); padding: 10px 14px; }
     .search-box svg { width: 18px; height: 18px; color: var(--text-muted); }
     .search-box input { border: none; background: none; flex: 1; font-size: 14px; color: var(--text-primary); }
     .search-box input:focus { outline: none; }
     .conv-list { flex: 1; overflow-y: auto; }
     .conv-item { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
-    .conv-item:hover { background: var(--bg); }
-    .conv-item.active { background: rgba(20, 184, 166, 0.1); }
-    .conv-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-weight: 600; font-size: 16px; flex-shrink: 0; }
+    .conv-item:hover { background: var(--bg-main); }
+    .conv-item.active { background: rgba(37, 211, 102, 0.12); }
+    .conv-avatar { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, rgba(7,94,84,0.12), rgba(37,211,102,0.18)); display: flex; align-items: center; justify-content: center; color: var(--primary); font-weight: 700; font-size: 15px; flex-shrink: 0; }
     .conv-info { flex: 1; min-width: 0; }
     .conv-name { font-weight: 600; font-size: 15px; color: var(--text-primary); }
-    .conv-preview { font-size: 13px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+    .conv-preview { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
     .conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-    .conv-time { font-size: 11px; color: var(--text-light); }
-    .unread-badge { background: var(--accent); color: white; font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 12px; }
-    .conv-main { flex: 1; background: var(--bg); display: flex; flex-direction: column; }
+    .conv-time { font-size: 11px; color: var(--text-muted); }
+    .unread-badge { background: var(--accent); color: white; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+    .conv-main { flex: 1; background: linear-gradient(180deg, #F8FAFC 0%, #F4F7FB 100%); display: flex; flex-direction: column; }
     .conv-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); }
     .conv-empty svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
     .conv-empty-text { font-size: 15px; }
@@ -999,34 +1045,35 @@ function getConversationPage(convId) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Conversation</title>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>${sharedStyles}
     .chat-page { display: flex; flex-direction: column; height: calc(100vh - 57px); }
-    .chat-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 12px; }
-    .back-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--bg); border: none; cursor: pointer; transition: all 0.2s; }
+    .chat-header { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 12px; box-shadow: var(--shadow-sm); }
+    .back-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: var(--bg-main); border: none; cursor: pointer; transition: all 0.2s; }
     .back-btn:hover { background: var(--border); }
-    .chat-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-weight: 600; font-size: 14px; }
+    .chat-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, rgba(7,94,84,0.12), rgba(37,211,102,0.18)); display: flex; align-items: center; justify-content: center; color: var(--primary); font-weight: 700; font-size: 14px; }
     .chat-info { flex: 1; }
-    .chat-name { font-weight: 600; font-size: 15px; color: var(--text-primary); }
+    .chat-name { font-weight: 700; font-size: 15px; color: var(--text-primary); }
     .chat-status { font-size: 12px; color: var(--success); display: flex; align-items: center; gap: 4px; }
     .chat-status svg { width: 12px; height: 12px; }
     .chat-actions { display: flex; gap: 8px; }
-    .action-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--bg); border: none; cursor: pointer; transition: all 0.2s; }
+    .action-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--bg-main); border: none; cursor: pointer; transition: all 0.2s; }
     .action-btn:hover { background: var(--border); }
-    .messages-container { flex: 1; overflow-y: auto; padding: 20px; background: #e5ddd5; background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4ccc4' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+    .messages-container { flex: 1; overflow-y: auto; padding: 20px; background: linear-gradient(180deg, #F8FAFC 0%, #F3F6FA 100%); }
     .date-separator { text-align: center; padding: 12px 0; }
-    .date-separator span { background: rgba(255,255,255,0.8); padding: 6px 12px; border-radius: 8px; font-size: 11px; color: var(--text-muted); font-weight: 500; }
-    .msg { display: flex; gap: 8px; margin-bottom: 8px; animation: fadeIn 0.2s ease; }
+    .date-separator span { background: rgba(255,255,255,0.85); padding: 6px 12px; border-radius: 999px; font-size: 11px; color: var(--text-secondary); font-weight: 600; box-shadow: var(--shadow-sm); }
+    .msg { display: flex; gap: 8px; margin-bottom: 10px; animation: fadeIn 0.2s ease; }
     .msg.in { justify-content: flex-start; }
     .msg.out { justify-content: flex-end; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .msg-bubble { max-width: 65%; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; word-wrap: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; }
-    .msg.in .msg-bubble { background: var(--whatsapp-in); border-top-left-radius: 0; }
-    .msg.out .msg-bubble { background: var(--whatsapp-out); border-top-right-radius: 0; }
+    .msg-bubble { max-width: 68%; padding: 10px 12px; border-radius: 14px; font-size: 14px; line-height: 1.4; word-wrap: break-word; box-shadow: var(--shadow-sm); position: relative; }
+    .msg.in .msg-bubble { background: var(--whatsapp-in); border-top-left-radius: 4px; }
+    .msg.out .msg-bubble { background: var(--whatsapp-out); border-top-right-radius: 4px; }
     .msg-footer { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 4px; }
-    .msg-time { font-size: 10px; color: var(--text-light); }
+    .msg-time { font-size: 10px; color: var(--text-muted); }
     .msg-status svg { width: 14px; height: 14px; color: #34b7f1; }
-    .ai-badge { background: var(--accent-blue); color: white; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; margin-bottom: 4px; display: inline-block; }
+    .ai-badge { background: var(--primary); color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; margin-bottom: 4px; display: inline-block; }
     @media (max-width: 768px) { .msg-bubble { max-width: 85%; } }
   </style>
 </head>
@@ -1111,13 +1158,14 @@ function getSettingsPage() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Settings</title>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>${sharedStyles}
     .settings-grid { display: grid; gap: 20px; }
-    .settings-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; transition: all 0.2s; }
-    .settings-card:hover { box-shadow: var(--shadow-md); }
+    .settings-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: all 0.2s; box-shadow: var(--shadow-sm); }
+    .settings-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
     .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
-    .card-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; background: rgba(20, 184, 166, 0.1); color: var(--accent); }
+    .card-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(37, 211, 102, 0.12); color: var(--primary); }
     .card-icon svg { width: 18px; height: 18px; }
     .card-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
     .card-body { padding: 20px; }
@@ -1305,19 +1353,20 @@ function getOrdersPage() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Orders</title>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>${sharedStyles}
-    .orders-table { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+    .orders-table { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
     table { width: 100%; border-collapse: collapse; }
-    thead { background: var(--bg); }
-    th { padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
-    td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid var(--border); }
-    tr:hover { background: var(--bg); }
-    .status-select { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; border: none; cursor: pointer; }
-    .status-select.new { background: rgba(249,115,22,0.1); color: var(--accent-orange); }
-    .status-select.confirmed { background: rgba(59,130,246,0.1); color: var(--accent-blue); }
-    .status-select.completed { background: rgba(22,163,74,0.1); color: var(--success); }
-    .status-select.cancelled { background: rgba(220,38,38,0.1); color: var(--error); }
+    thead { background: var(--bg-main); }
+    th { padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+    td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
+    tr:hover { background: var(--bg-main); }
+    .status-select { padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; }
+    .status-select.new { background: rgba(249,115,22,0.12); color: var(--warning); }
+    .status-select.confirmed { background: rgba(59,130,246,0.12); color: #2563eb; }
+    .status-select.completed { background: rgba(37,211,102,0.14); color: var(--success); }
+    .status-select.cancelled { background: rgba(239,68,68,0.12); color: var(--danger); }
     @media (max-width: 768px) { .orders-table { overflow-x: auto; display: block; } }
   </style>
 </head>
@@ -1358,15 +1407,16 @@ function getAnalyticsPage() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BizChat AI - Analytics</title>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>${sharedStyles}
     .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
-    .stats-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; text-align: center; }
+    .stats-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; box-shadow: var(--shadow-sm); }
     .stats-value { font-size: 32px; font-weight: 700; color: var(--text-primary); }
-    .stats-label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    .stats-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
     .charts-grid { display: grid; grid-template-columns: 60% 40%; gap: 16px; }
-    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px; }
+    .chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow-sm); }
     .chart-title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 16px; }
     @media (max-width: 1024px) { .charts-grid { grid-template-columns: 1fr; } .stats-row { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 768px) { .stats-row { grid-template-columns: 1fr; } }
