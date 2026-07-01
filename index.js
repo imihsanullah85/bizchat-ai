@@ -270,11 +270,16 @@ function detectOwnerNotificationType(messageText) {
 }
 
 async function notifyOwner(owner_whatsapp, notification_type, customer_phone, message_details) {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_ID || '';
+  console.log('notifyOwner called with:', {
+    owner: owner_whatsapp,
+    phoneId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+    type: notification_type
+  });
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const normalizedOwnerNumber = normalizeOwnerWhatsAppNumber(owner_whatsapp);
   console.log('Owner notification target number:', normalizedOwnerNumber);
-  console.log('Owner notification WHATSAPP_PHONE_NUMBER_ID:', phoneNumberId);
-  if (!normalizedOwnerNumber || !phoneNumberId) {
+  console.log('Owner notification WHATSAPP_PHONE_NUMBER_ID:', phoneId);
+  if (!normalizedOwnerNumber || !phoneId) {
     console.log('Owner notification skipped: missing owner number or phone ID');
     return;
   }
