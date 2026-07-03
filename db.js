@@ -69,6 +69,19 @@ async function createTables() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        business_id INTEGER REFERENCES businesses(id),
+        conversation_id INTEGER,
+        customer_phone VARCHAR(20),
+        order_details TEXT,
+        requested_datetime VARCHAR(100),
+        status VARCHAR(20) DEFAULT 'new',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS conversation_insights (
         id SERIAL PRIMARY KEY,
         business_id INTEGER REFERENCES businesses(id),
