@@ -67,6 +67,18 @@ async function createTables() {
         timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS conversation_insights (
+        id SERIAL PRIMARY KEY,
+        business_id INTEGER REFERENCES businesses(id),
+        conversation_id INTEGER,
+        customer_phone VARCHAR(20),
+        insight_type VARCHAR(50),
+        insight_data TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
     console.log('Tables created successfully (if they did not exist).');
   } catch (err) {
     console.error('Error creating tables:', err);

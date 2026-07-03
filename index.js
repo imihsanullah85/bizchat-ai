@@ -99,6 +99,22 @@ async function getMessagesForConversation(conversationId) {
   return rows;
 }
 
+async function insertConversationInsight(businessId, conversationId, customerPhone, insightType, insightData) {
+  const { rows } = await pool.query(
+    'INSERT INTO conversation_insights (business_id, conversation_id, customer_phone, insight_type, insight_data) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+    [businessId, conversationId, customerPhone, insightType, insightData]
+  );
+  return rows[0];
+}
+
+async function getRecentInsightsForBusiness(businessId, limit = 5) {
+  const { rows } = await pool.query(
+    'SELECT * FROM conversation_insights WHERE business_id = $1 ORDER BY created_at DESC LIMIT $2',
+    [businessId, limit]
+  );
+  return rows;
+}
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -164,6 +180,13 @@ async function handleWhatsAppMessage(msg, value) {
   const notificationType = detectOwnerNotificationType(messageText);
   if (notificationType) {
     console.log('Owner notification triggered');
+    const insightTypeMap = {
+      order: 'hot_lead',
+      attention: 'complaint',
+      human: 'handoff_requested'
+    };
+    const insightType = insightTypeMap[notificationType] || notificationType;
+    await insertConversationInsight(business.id, conversation.id, customerPhone, insightType, messageText);
     const customerAutoReply = "Thanks for reaching out! I've notified our team and someone will get back to you shortly. In the meantime, is there anything else I can help you with?";
     await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, customerAutoReply);
     await insertMessage(conversation.id, 'out', customerAutoReply);
@@ -285,7 +308,21 @@ async function notifyOwner(owner_whatsapp, notification_type, customer_phone, me
   }
   let messageText = '';
   if (notification_type === 'order') {
-    messageText = `🛒 New Order Alert - BizChat AI\nCustomer: ${customer_phone}\nThey said: ${message_details}\nStatus: Interested in placing an order\n👉 Reply to them now on WhatsApp to close the sale!`;
+    messageText = `🛒 Hot Lead Alert - BizChat AI
+
+Customer: ${customer_phone}
+They said: ${message_details}
+
+💬 SUGGESTED REPLY TO SEND THEM:
+'Thank you for your interest! I'm personally handling 
+your order. Can you confirm:
+1. Exact item/service you want
+2. Your delivery address or preferred appointment time
+3. Your name
+
+I'll confirm everything within 5 minutes! 🙏'
+
+👆 Copy and send this to the customer now to close the sale!`;
   } else if (notification_type === 'attention') {
     messageText = `⚠️ Customer Needs Attention - BizChat AI\nCustomer: ${customer_phone}\nThey said: ${message_details}\nStatus: May need personal response\n👉 Check this conversation on your dashboard now.`;
   } else if (notification_type === 'human') {
@@ -361,6 +398,16 @@ app.put('/api/business', requireAuth, async (req, res) => {
 app.get('/api/conversations', requireAuth, async (req, res) => {
   const conversations = await getConversationsForBusiness(req.session.businessId);
   res.json(conversations);
+});
+
+app.get('/api/insights', requireAuth, async (req, res) => {
+  try {
+    const insights = await getRecentInsightsForBusiness(req.session.businessId);
+    res.json(insights);
+  } catch (error) {
+    console.error('Insights error:', error);
+    res.status(500).json({ error: 'Failed to fetch insights' });
+  }
 });
 
 app.get('/api/conversations/:id/messages', requireAuth, async (req, res) => {
@@ -858,12 +905,8 @@ function getDashboardPage() {
       </div>
       <div class="middle-row">
         <div class="panel"><div class="panel-header"><h2 class="panel-title">Recent Conversations</h2><a href="/conversations" class="view-all">View all <i data-lucide="chevron-right" style="width:12px;height:12px"></i></a></div><div class="conv-list" id="convList"></div></div>
-        <div class="panel"><div class="panel-header"><h2 class="panel-title">Recent Insights</h2></div><div class="insight-list">
-          <div class="insight-item"><div class="insight-icon">💬</div><div><div class="insight-title">+92 300 1234567</div><div class="insight-text">Asked about pricing and delivery</div></div><div class="insight-time">12m ago</div></div>
-          <div class="insight-item"><div class="insight-icon">🛒</div><div><div class="insight-title">+92 301 7654321</div><div class="insight-text">Interested in placing an order</div></div><div class="insight-time">24m ago</div></div>
-          <div class="insight-item"><div class="insight-icon">⚡</div><div><div class="insight-title">+92 333 998877</div><div class="insight-text">Requested help with a refund</div></div><div class="insight-time">1h ago</div></div>
-          <div class="insight-item"><div class="insight-icon">📍</div><div><div class="insight-title">+92 321 445566</div><div class="insight-text">Asked for store timings</div></div><div class="insight-time">2h ago</div></div>
-          <div class="insight-item"><div class="insight-icon">✅</div><div><div class="insight-title">+92 302 778899</div><div class="insight-text">Confirmed appointment request</div></div><div class="insight-time">3h ago</div></div>
+        <div class="panel"><div class="panel-header"><h2 class="panel-title">Recent Insights</h2></div><div class="insight-list" id="insightList">
+          <div class="insight-item"><div class="insight-icon">—</div><div><div class="insight-title">No insights yet</div><div class="insight-text">Once a hot lead, complaint, or handoff request is detected, it appears here.</div></div><div class="insight-time"></div></div>
         </div></div>
       </div>
       <div class="bottom-row">
@@ -930,6 +973,27 @@ function getDashboardPage() {
         document.getElementById('topQuestion').textContent = 'price';
         document.getElementById('busiestHour').textContent = '2 PM';
         document.getElementById('avgResponse').textContent = '2 min';
+
+        const insightList = document.getElementById('insightList');
+        try {
+          const insights = await fetch('/api/insights').then(r => r.json());
+          if (Array.isArray(insights) && insights.length) {
+            insightList.innerHTML = insights.map(insight => {
+              const icons = { hot_lead: '🔥', complaint: '⚠️', handoff_requested: '👤' };
+              const icon = icons[insight.insight_type] || 'ℹ️';
+              const truncated = escapeHtml((insight.insight_data || '').slice(0, 50) + ((insight.insight_data || '').length > 50 ? '...' : ''));
+              return '<div class="insight-item">' +
+                '<div class="insight-icon">' + icon + '</div>' +
+                '<div><div class="insight-title">' + escapeHtml(insight.customer_phone || '') + '</div>' +
+                '<div class="insight-text">' + truncated + '</div></div>' +
+                '<div class="insight-time">' + getTimeAgo(insight.created_at) + '</div>' +
+                '</div>';
+            }).join('');
+          }
+        } catch (err) {
+          console.error('Dashboard insights load error:', err);
+        }
+
         lucide.createIcons();
       } catch (err) { console.error(err); }
     }
