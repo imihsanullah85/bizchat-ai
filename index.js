@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
+const rateLimit = require('express-rate-limit');
 const { pool, createTables } = require('./db');
 
 const app = express();
@@ -139,6 +140,32 @@ async function hasRecentConversationInsight(conversationId, insightType, minutes
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: 'Too many requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  message: 'Webhook rate limit exceeded.'
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many login attempts, try again in 15 minutes.'
+});
+
+app.use('/webhook', webhookLimiter);
+app.use('/login', loginLimiter);
+app.use('/register', loginLimiter);
+app.use('/api', generalLimiter);
+
 app.use(session({
   store: new pgSession({
     conString: process.env.DATABASE_URL,
