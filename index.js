@@ -99,6 +99,14 @@ async function getMessagesForConversation(conversationId) {
   return rows;
 }
 
+async function getLastMessagesForConversation(conversationId, limit = 10) {
+  const { rows } = await pool.query(
+    'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY timestamp DESC LIMIT $2',
+    [conversationId, limit]
+  );
+  return rows.reverse();
+}
+
 async function insertConversationInsight(businessId, conversationId, customerPhone, insightType, insightData) {
   const { rows } = await pool.query(
     'INSERT INTO conversation_insights (business_id, conversation_id, customer_phone, insight_type, insight_data) VALUES ($1, $2, $3, $4, $5) RETURNING *',
@@ -210,12 +218,18 @@ async function handleWhatsAppMessage(msg, value) {
     await insertMessage(conversation.id, 'out', customerAutoReply);
   }
 
-  const aiResponse = await generateAIResponse(business, messageText);
+  const recentMessages = await getLastMessagesForConversation(conversation.id, 10);
+  const conversationHistory = recentMessages.map((msg) => {
+    const role = msg.direction === 'out' ? 'assistant' : 'user';
+    return { role, content: msg.content };
+  });
+
+  const aiResponse = await generateAIResponse(business, conversationHistory);
   await insertMessage(conversation.id, 'out', aiResponse);
   await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, aiResponse);
 }
 
-async function generateAIResponse(business, customerMessage) {
+async function generateAIResponse(business, conversationHistory) {
   const businessRecord = await getBusinessById(business.id) || business;
   const businessName = businessRecord.shop_name || 'this business';
   const businessCategory = '';
@@ -262,10 +276,14 @@ BUSINESS INFORMATION (use this as your only source of truth):
 ${businessInfoLines.join('\n')}`;
 
   try {
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory
+    ];
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'openrouter/free', messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: customerMessage }] })
+      body: JSON.stringify({ model: 'openrouter/free', messages })
     });
     const data = await response.json();
     if (data.error) { console.error('OpenRouter error:', data.error); return 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.'; }
