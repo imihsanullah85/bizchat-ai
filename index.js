@@ -184,18 +184,334 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
+function normalizePhoneNumber(value) {
+  if (!value) return '';
+  const digits = String(value).replace(/[^\d]/g, '');
+  if (!digits) return '';
+  const withoutLeadingZeros = digits.replace(/^0+/, '');
+  if (!withoutLeadingZeros) return '';
+  if (withoutLeadingZeros.startsWith('92')) return withoutLeadingZeros;
+  if (withoutLeadingZeros.length === 10) return `92${withoutLeadingZeros}`;
+  return withoutLeadingZeros;
+}
+
+function isMediaMessage(msg) {
+  return Boolean(msg.image || msg.document || msg.audio || msg.video || msg.sticker || msg.voice || ['image', 'document', 'video', 'audio', 'sticker', 'voice'].includes(msg.type));
+}
+
+function formatTimeAgo(dateValue) {
+  if (!dateValue) return 'just now';
+  const diffMinutes = Math.max(1, Math.floor((Date.now() - new Date(dateValue).getTime()) / 60000));
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)}h ago`;
+  return `${Math.floor(diffMinutes / 1440)}d ago`;
+}
+
+function extractAmountFromDetails(details) {
+  const match = String(details || '').match(/pkr\s*([0-9,]+)/i);
+  return match ? match[1].replace(/,/g, '') : '0';
+}
+
+function buildOrderSummary(data, business) {
+  const paymentMethod = business.payment_method || 'Bank Transfer';
+  const paymentAccount = business.payment_link || 'Please contact our team';
+  const paymentName = business.shop_name || 'BizChat AI';
+  return `Perfect! Here's your order summary:
+━━━━━━━━━━━━━━━
+📦 Item: ${data.item}
+🔢 Quantity: ${data.quantity}
+📍 Address: ${data.address}
+💰 Amount: Please ask our team for final price
+━━━━━━━━━━━━━━━
+To confirm, please send your payment to:
+${paymentMethod}: ${paymentAccount}
+Account Name: ${paymentName}
+
+After sending payment, reply with your transaction screenshot here.`;
+}
+
+async function updateConversationOrderFlow(conversationId, state, data) {
+  const { rows } = await pool.query(
+    'UPDATE conversations SET order_flow_state = $1, order_flow_data = $2 WHERE id = $3 RETURNING *',
+    [state, data ? JSON.stringify(data) : null, conversationId]
+  );
+  return rows[0];
+}
+
+async function handleOwnerCommand(msg, business) {
+  const messageText = (msg.text?.body || '').trim();
+  if (!messageText) return;
+
+  const ownerPhoneId = business.whatsapp_phone_id;
+  const ownerNumber = normalizePhoneNumber(business.owner_whatsapp);
+  const ownerReply = async (text) => {
+    if (!ownerNumber || !ownerPhoneId) {
+      console.log('Owner reply skipped because owner number or phone ID is missing.');
+      return;
+    }
+    await sendWhatsAppMessage(business.whatsapp_number, ownerPhoneId, ownerNumber, text);
+  };
+
+  const command = messageText.toLowerCase();
+
+  if (['stats', 'status', 'report'].includes(command)) {
+    const [{ rows: conversationRows }, { rows: messageRows }, { rows: orderRows }, { rows: insightRows }] = await Promise.all([
+      pool.query('SELECT COUNT(*)::int AS count FROM conversations WHERE business_id = $1 AND created_at >= CURRENT_DATE', [business.id]),
+      pool.query('SELECT COUNT(*)::int AS count FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = $1 AND m.timestamp >= CURRENT_DATE', [business.id]),
+      pool.query("SELECT COUNT(*)::int AS count FROM orders WHERE business_id = $1 AND status IN ('new', 'payment_pending')", [business.id]),
+      pool.query("SELECT COUNT(*)::int AS count FROM conversation_insights WHERE business_id = $1 AND insight_type = 'hot_lead' AND created_at >= CURRENT_DATE", [business.id])
+    ]);
+    const reportText = `📊 BizChat AI - Daily Report
+━━━━━━━━━━━━━━━
+📱 Total conversations today: ${conversationRows[0]?.count || 0}
+💬 Total messages today: ${messageRows[0]?.count || 0}
+🛒 Pending orders: ${orderRows[0]?.count || 0}
+🔥 Hot leads: ${insightRows[0]?.count || 0}
+━━━━━━━━━━━━━━━
+Reply 'orders' for order details
+Reply 'leads' for lead details`;
+    await ownerReply(reportText);
+    return;
+  }
+
+  if (command === 'orders') {
+    const { rows } = await pool.query(
+      "SELECT * FROM orders WHERE business_id = $1 AND status IN ('new', 'payment_pending') ORDER BY created_at DESC LIMIT 5",
+      [business.id]
+    );
+    if (!rows.length) {
+      await ownerReply('🛒 Pending Orders:\n━━━━━━━━━━━━━━━\nNo pending orders found.\n━━━━━━━━━━━━━━━');
+      return;
+    }
+    const orderLines = rows.map((order, index) => {
+      const amount = extractAmountFromDetails(order.order_details);
+      return `${index + 1}. ${order.customer_phone}\n   ${order.order_details}\n   PKR ${amount} | ${formatTimeAgo(order.created_at)}\n   Reply 'confirm ${order.id}' to confirm`;
+    });
+    await ownerReply(`🛒 Pending Orders:\n━━━━━━━━━━━━━━━\n${orderLines.join('\n\n')}\n━━━━━━━━━━━━━━━`);
+    return;
+  }
+
+  const confirmMatch = messageText.match(/^confirm\s+(\d+)$/i);
+  if (confirmMatch) {
+    const orderId = Number(confirmMatch[1]);
+    const { rows } = await pool.query('SELECT * FROM orders WHERE id = $1 AND business_id = $2', [orderId, business.id]);
+    if (!rows[0]) {
+      await ownerReply('⚠️ Order not found.');
+      return;
+    }
+    await pool.query("UPDATE orders SET status = 'confirmed' WHERE id = $1 AND business_id = $2", [orderId, business.id]);
+    const customerMessage = `✅ Great news! Your order has been confirmed by our team.\nWe'll be in touch shortly with delivery details. \nThank you for choosing ${business.shop_name || 'our team'}! 🙏`;
+    await sendWhatsAppMessage(business.whatsapp_number, ownerPhoneId, rows[0].customer_phone, customerMessage);
+    await ownerReply(`✅ Order #${orderId} confirmed. Customer notified.`);
+    return;
+  }
+
+  if (command === 'leads') {
+    const { rows } = await pool.query(
+      "SELECT * FROM conversation_insights WHERE business_id = $1 AND insight_type = 'hot_lead' ORDER BY created_at DESC LIMIT 5",
+      [business.id]
+    );
+    if (!rows.length) {
+      await ownerReply('🔥 Hot Leads:\n━━━━━━━━━━━━━━━\nNo hot leads found.\n━━━━━━━━━━━━━━━');
+      return;
+    }
+    const leadLines = rows.map((insight, index) => `${index + 1}. ${insight.customer_phone}\n   Said: ${String(insight.insight_data || '').slice(0, 80)}\n   ${formatTimeAgo(insight.created_at)}`);
+    await ownerReply(`🔥 Hot Leads:\n━━━━━━━━━━━━━━━\n${leadLines.join('\n\n')}\n━━━━━━━━━━━━━━━`);
+    return;
+  }
+
+  if (command === 'top questions') {
+    const { rows } = await pool.query(`
+      SELECT m.content
+      FROM messages m
+      JOIN conversations c ON c.id = m.conversation_id
+      WHERE c.business_id = $1 AND m.direction = 'in'
+    `, [business.id]);
+    const counts = {};
+    const stopWords = new Set(['the', 'a', 'is', 'what', 'how', 'i', 'my', 'to', 'for', 'and', 'of', 'in', 'on', 'at', 'be', 'can', 'do', 'our', 'you', 'your', 'with', 'this', 'that', 'are', 'will', 'from', 'an', 'it', 'me', 'we', 'want', 'need', 'please', 'thanks', 'hi', 'hello']);
+    rows.forEach(({ content }) => {
+      const words = String(content || '').toLowerCase().match(/[a-zA-Z]+/g) || [];
+      words.forEach((word) => {
+        const normalized = word.replace(/[^a-z]/g, '');
+        if (!normalized || normalized.length < 3 || stopWords.has(normalized)) return;
+        counts[normalized] = (counts[normalized] || 0) + 1;
+      });
+    });
+    const topQuestions = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    if (!topQuestions.length) {
+      await ownerReply('❓ Top Customer Questions This Week:\n━━━━━━━━━━━━━━━\nNo customer questions found.\n━━━━━━━━━━━━━━━');
+      return;
+    }
+    const questionLines = topQuestions.map(([word, count], index) => `${index + 1}. ${word} - mentioned ${count} times`);
+    await ownerReply(`❓ Top Customer Questions This Week:\n━━━━━━━━━━━━━━━\n${questionLines.join('\n')}\n━━━━━━━━━━━━━━━`);
+    return;
+  }
+
+  if (command === 'busy hours') {
+    const { rows } = await pool.query(`
+      SELECT m.timestamp
+      FROM messages m
+      JOIN conversations c ON c.id = m.conversation_id
+      WHERE c.business_id = $1
+    `, [business.id]);
+    const hourCounts = {};
+    rows.forEach(({ timestamp }) => {
+      const date = new Date(timestamp);
+      const hour = date.getHours();
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+    const busiestHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const hourLines = busiestHours.map(([hour, count], index) => {
+      const start = Number(hour);
+      const label = `${start % 12 || 12}${start >= 12 ? 'pm' : 'am'} - ${(start + 1) % 24 === 0 ? 12 : ((start + 1) % 12 || 12)}${(start + 1) >= 12 ? 'pm' : 'am'}`;
+      return `${index + 1}. ${label}: ${count} messages`;
+    });
+    await ownerReply(`⏰ Your Busiest Hours:\n━━━━━━━━━━━━━━━\n${hourLines.join('\n')}\n━━━━━━━━━━━━━━━`);
+    return;
+  }
+
+  const replyMatch = messageText.match(/^reply\s+(\S+)\s+(.+)$/i);
+  if (replyMatch) {
+    const targetPhone = normalizePhoneNumber(replyMatch[1]);
+    const replyBody = replyMatch[2].trim();
+    if (!targetPhone || !replyBody) {
+      await ownerReply('⚠️ Please provide a phone number and message to send.');
+      return;
+    }
+    await sendWhatsAppMessage(business.whatsapp_number, ownerPhoneId, targetPhone, replyBody);
+    await ownerReply(`✅ Message sent to ${targetPhone}`);
+    return;
+  }
+
+  await ownerReply(`👋 BizChat AI Owner Commands:\n━━━━━━━━━━━━━━━\n📊 stats — daily summary\n🛒 orders — pending orders\n🔥 leads — hot leads\n❓ top questions — popular topics\n⏰ busy hours — peak times\n💬 reply {number} {msg} — message a customer\n━━━━━━━━━━━━━━━\nYou are in Owner Mode 🔐`);
+}
+
+async function handleOrderFlowMessage(msg, value, conversation, business) {
+  const customerPhone = msg.from;
+  const businessPhoneId = value.metadata?.phone_number_id;
+  const messageText = msg.text?.body || '';
+  const messageContent = messageText || (isMediaMessage(msg) ? '[media]' : '');
+  const currentData = conversation.order_flow_data || {};
+
+  if (conversation.order_flow_state === 'collecting_item') {
+    const itemText = messageText.trim();
+    if (!itemText) {
+      const prompt = "I'd love to help you place an order! 🛍️\nWhat would you like to order? Please mention the item name and any specific details.";
+      await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+      await insertMessage(conversation.id, 'out', prompt);
+      return true;
+    }
+    const updatedData = { ...currentData, item: itemText };
+    await updateConversationOrderFlow(conversation.id, 'collecting_quantity', updatedData);
+    const prompt = 'How many units would you like?';
+    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+    await insertMessage(conversation.id, 'out', prompt);
+    return true;
+  }
+
+  if (conversation.order_flow_state === 'collecting_quantity') {
+    const quantityText = messageText.trim();
+    if (!quantityText) {
+      const prompt = 'How many units would you like?';
+      await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+      await insertMessage(conversation.id, 'out', prompt);
+      return true;
+    }
+    const updatedData = { ...currentData, quantity: quantityText };
+    await updateConversationOrderFlow(conversation.id, 'collecting_address', updatedData);
+    const prompt = 'Please share your full name and delivery address.';
+    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+    await insertMessage(conversation.id, 'out', prompt);
+    return true;
+  }
+
+  if (conversation.order_flow_state === 'collecting_address') {
+    const addressText = messageText.trim();
+    if (!addressText) {
+      const prompt = 'Please share your full name and delivery address.';
+      await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+      await insertMessage(conversation.id, 'out', prompt);
+      return true;
+    }
+    const updatedData = { ...currentData, address: addressText };
+    await updateConversationOrderFlow(conversation.id, 'collecting_payment', updatedData);
+    const prompt = buildOrderSummary(updatedData, business);
+    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+    await insertMessage(conversation.id, 'out', prompt);
+    return true;
+  }
+
+  if (conversation.order_flow_state === 'collecting_payment') {
+    await updateConversationOrderFlow(conversation.id, 'awaiting_screenshot', currentData);
+    const prompt = 'Please reply with your transaction screenshot so we can verify your payment.';
+    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+    await insertMessage(conversation.id, 'out', prompt);
+    return true;
+  }
+
+  if (conversation.order_flow_state === 'awaiting_screenshot') {
+    if (isMediaMessage(msg)) {
+      const orderDetails = `Item: ${currentData.item}\nQuantity: ${currentData.quantity}\nAddress: ${currentData.address}`;
+      const { rows } = await pool.query(
+        'INSERT INTO orders (business_id, conversation_id, customer_phone, order_details, requested_datetime, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [business.id, conversation.id, customerPhone, orderDetails, new Date().toISOString(), 'payment_pending']
+      );
+      const ownerMessage = `🛒 NEW ORDER - Payment Received!\n━━━━━━━━━━━━━━━\nCustomer: ${customerPhone}\nItem: ${currentData.item}\nQuantity: ${currentData.quantity}\nAddress: ${currentData.address}\nStatus: Screenshot received - VERIFY PAYMENT\n━━━━━━━━━━━━━━━\nReply 'confirm ${rows[0].id}' to confirm this order\nor open dashboard to review.`;
+      await sendWhatsAppMessage(business.whatsapp_number, business.whatsapp_phone_id, normalizePhoneNumber(business.owner_whatsapp), ownerMessage);
+      const confirmationMessage = 'Thank you! 🙏 Your payment screenshot has been received. Our team will verify and confirm your order within 15 minutes.';
+      await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, confirmationMessage);
+      await insertMessage(conversation.id, 'out', confirmationMessage);
+      await updateConversationOrderFlow(conversation.id, null, null);
+      return true;
+    }
+    const prompt = 'Please reply with your transaction screenshot so we can verify your payment.';
+    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+    await insertMessage(conversation.id, 'out', prompt);
+    return true;
+  }
+
+  return false;
+}
+
+function isBuyingIntent(messageText) {
+  const text = String(messageText || '').toLowerCase();
+  const keywords = ['buy', 'purchase', 'order', 'book', 'appointment', 'i want', 'i need', 'interested', 'reserve', 'price', 'payment', 'confirm'];
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
 async function handleWhatsAppMessage(msg, value) {
   const customerPhone = msg.from;
   const businessPhoneId = value.metadata?.phone_number_id;
   const messageText = msg.text?.body || '';
+  const messageContent = messageText || (isMediaMessage(msg) ? '[media]' : '');
   const customerName = msg.profile?.name || 'Customer';
-  if (!messageText) return;
+  if (!messageContent) return;
 
   const business = await getBusinessByWhatsAppPhoneId(businessPhoneId);
   if (!business) { console.log('No business found for phone ID:', businessPhoneId); return; }
 
+  const normalizedSender = normalizePhoneNumber(customerPhone);
+  const normalizedOwner = normalizePhoneNumber(business.owner_whatsapp);
+  if (normalizedSender && normalizedOwner && normalizedSender === normalizedOwner) {
+    await handleOwnerCommand(msg, business);
+    return;
+  }
+
   const conversation = await ensureConversation(business.id, customerPhone, customerName);
-  await insertMessage(conversation.id, 'in', messageText);
+  await insertMessage(conversation.id, 'in', messageContent);
+
+  if (conversation.order_flow_state) {
+    const handled = await handleOrderFlowMessage(msg, value, conversation, business);
+    if (handled) return;
+  }
+
+  if (!conversation.order_flow_state && isBuyingIntent(messageText)) {
+    await updateConversationOrderFlow(conversation.id, 'collecting_item', {});
+    const prompt = "I'd love to help you place an order! 🛍️\nWhat would you like to order? Please mention the item name and any specific details.";
+    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+    await insertMessage(conversation.id, 'out', prompt);
+    return;
+  }
 
   const notificationType = detectOwnerNotificationType(messageText);
   if (notificationType) {
@@ -219,9 +535,9 @@ async function handleWhatsAppMessage(msg, value) {
   }
 
   const recentMessages = await getLastMessagesForConversation(conversation.id, 10);
-  const conversationHistory = recentMessages.map((msg) => {
-    const role = msg.direction === 'out' ? 'assistant' : 'user';
-    return { role, content: msg.content };
+  const conversationHistory = recentMessages.map((entry) => {
+    const role = entry.direction === 'out' ? 'assistant' : 'user';
+    return { role, content: entry.content };
   });
 
   const aiResponse = await generateAIResponse(business, conversationHistory);

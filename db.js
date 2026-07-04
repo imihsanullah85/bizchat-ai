@@ -54,8 +54,18 @@ async function createTables() {
         customer_phone VARCHAR(255) NOT NULL,
         customer_name VARCHAR(255),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        order_flow_state VARCHAR(50),
+        order_flow_data JSONB,
         UNIQUE (business_id, customer_phone)
       );
+    `);
+
+    await client.query(`
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS order_flow_state VARCHAR(50);
+    `);
+
+    await client.query(`
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS order_flow_data JSONB;
     `);
 
     await client.query(`
