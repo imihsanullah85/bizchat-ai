@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const rateLimit = require('express-rate-limit');
+const validator = require('validator');
 const { pool, createTables } = require('./db');
 
 const app = express();
@@ -15,6 +16,14 @@ if (isProduction && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.l
 
 if (isProduction) {
   app.set('trust proxy', 1);
+}
+
+function sanitizeInput(input) {
+  if (!input) return '';
+  return String(input)
+    .trim()
+    .replace(/[<>]/g, '')
+    .substring(0, 5000);
 }
 
 // Database helpers
@@ -429,14 +438,15 @@ Reply 'leads' for lead details`;
 }
 
 async function handleOrderFlowMessage(msg, value, conversation, business) {
-  const customerPhone = msg.from;
+  const customerPhone = sanitizeInput(msg.from);
   const businessPhoneId = value.metadata?.phone_number_id;
-  const messageText = msg.text?.body || '';
+  const rawMessageText = msg.text?.body || '';
+  const messageText = sanitizeInput(rawMessageText);
   const messageContent = messageText || (isMediaMessage(msg) ? '[media]' : '');
   const currentData = conversation.order_flow_data || {};
 
   if (conversation.order_flow_state === 'collecting_item') {
-    const itemText = messageText.trim();
+    const itemText = sanitizeInput(messageText);
     if (!itemText) {
       const prompt = "I'd love to help you place an order! 🛍️\nWhat would you like to order? Please mention the item name and any specific details.";
       await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
@@ -452,7 +462,7 @@ async function handleOrderFlowMessage(msg, value, conversation, business) {
   }
 
   if (conversation.order_flow_state === 'collecting_quantity') {
-    const quantityText = messageText.trim();
+    const quantityText = sanitizeInput(messageText);
     if (!quantityText) {
       const prompt = 'How many units would you like?';
       await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
@@ -468,7 +478,7 @@ async function handleOrderFlowMessage(msg, value, conversation, business) {
   }
 
   if (conversation.order_flow_state === 'collecting_address') {
-    const addressText = messageText.trim();
+    const addressText = sanitizeInput(messageText);
     if (!addressText) {
       const prompt = 'Please share your full name and delivery address.';
       await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
@@ -522,11 +532,12 @@ function isBuyingIntent(messageText) {
 }
 
 async function handleWhatsAppMessage(msg, value) {
-  const customerPhone = msg.from;
+  const customerPhone = sanitizeInput(msg.from);
   const businessPhoneId = value.metadata?.phone_number_id;
-  const messageText = msg.text?.body || '';
+  const rawMessageText = msg.text?.body || '';
+  const messageText = sanitizeInput(rawMessageText);
   const messageContent = messageText || (isMediaMessage(msg) ? '[media]' : '');
-  const customerName = msg.profile?.name || 'Customer';
+  const customerName = sanitizeInput(msg.profile?.name || 'Customer');
   if (!messageContent) return;
 
   let business;
@@ -769,12 +780,15 @@ I'll confirm everything within 5 minutes! 🙏'
 
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, shop_name } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const sanitizedEmail = sanitizeInput(email);
+  const sanitizedShopName = sanitizeInput(shop_name);
+  if (!sanitizedEmail || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!validator.isEmail(sanitizedEmail)) return res.status(400).json({ error: 'Invalid email' });
   try {
-    const existing = await getBusinessByEmail(email);
+    const existing = await getBusinessByEmail(sanitizedEmail);
     if (existing) return res.status(400).json({ error: 'Email already registered' });
     const passwordHash = await bcrypt.hash(password, 12);
-    const business = await insertBusiness(email, passwordHash, shop_name || 'My Shop');
+    const business = await insertBusiness(sanitizedEmail, passwordHash, sanitizedShopName || 'My Shop');
     req.session.businessId = business.id;
     res.json({ success: true, businessId: business.id });
   } catch (error) { console.error('Register error:', error); res.status(500).json({ error: 'Registration failed' }); }
@@ -782,9 +796,11 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const sanitizedEmail = sanitizeInput(email);
+  if (!sanitizedEmail || !password) return res.status(400).json({ error: 'Email and password required' });
+  if (!validator.isEmail(sanitizedEmail)) return res.status(400).json({ error: 'Invalid email' });
   try {
-    const business = await getBusinessByEmail(email);
+    const business = await getBusinessByEmail(sanitizedEmail);
     if (!business) return res.status(401).json({ error: 'Invalid credentials' });
     const valid = await bcrypt.compare(password, business.password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
@@ -812,7 +828,7 @@ app.get('/api/validate/tenant-data', requireAuth, async (req, res) => {
 app.put('/api/business', requireAuth, async (req, res) => {
   const updates = {};
   ['shop_name', 'description', 'services', 'prices', 'timings', 'faqs', 'whatsapp_number', 'whatsapp_phone_id', 'owner_whatsapp', 'payment_link', 'category', 'services_list', 'business_hours'].forEach((key) => {
-    if (Object.prototype.hasOwnProperty.call(req.body, key)) updates[key] = req.body[key];
+    if (Object.prototype.hasOwnProperty.call(req.body, key)) updates[key] = sanitizeInput(req.body[key]);
   });
   if (!Object.keys(updates).length) return res.status(400).json({ success: false, error: 'No update fields provided' });
   try {

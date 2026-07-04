@@ -14,7 +14,8 @@
     "connect-pg-simple": "^9.0.0",
     "express-rate-limit": "^7.0.0",
     "express-session": "^1.17.3",
-    "pg": "^8.11.3"
+    "pg": "^8.11.3",
+    "validator": "^13.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
