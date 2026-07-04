@@ -1223,7 +1223,8 @@ function getLoginPage() {
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       let hasError = false;
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showFieldError('email', 'Please enter a valid email.'); hasError = true; }
+      const emailValid = email.includes('@') && email.includes('.');
+      if (!email || !emailValid) { showFieldError('email', 'Please enter a valid email.'); hasError = true; }
       if (!password) { showFieldError('password', 'Please enter your password.'); hasError = true; }
       if (hasError) {
         document.getElementById('loginCard').classList.remove('shake');
@@ -2221,6 +2222,7 @@ function getAnalyticsPage() {
 
 // Start server
 async function startServer() {
+  console.log('Database connected to:', process.env.DATABASE_URL ? 'PostgreSQL' : 'No database found');
   await createTables();
   await findDuplicateWhatsAppPhoneIds().catch(() => {});
   app.listen(PORT, () => {
