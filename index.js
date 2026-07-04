@@ -977,6 +977,114 @@ body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(
   .container { padding: 16px; }
   .top-bar { padding: 16px; }
 }
+
+body.page-transitioning .main-content {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all 0.2s ease;
+}
+
+body.page-transitioning .top-bar,
+body.page-transitioning .container {
+  pointer-events: none;
+}
+
+.nav-item, .mobile-nav-item, .btn, .card, .stat-card, .panel, .settings-card, .order-card, .conv-item {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.nav-item:hover, .mobile-nav-item:hover, .btn:hover, .stat-card:hover, .panel:hover, .settings-card:hover, .order-card:hover, .conv-item:hover {
+  transform: translateY(-2px);
+}
+
+.nav-item:active, .btn:active, .mobile-nav-item:active {
+  transform: scale(0.98);
+}
+
+.btn::after, .nav-item::after, .mobile-nav-item::after, .order-card button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.25);
+  border-radius: inherit;
+  transform: scale(0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.btn:active::after, .nav-item:active::after, .mobile-nav-item:active::after, .order-card button:active::after {
+  animation: ripple 0.35s ease-out;
+}
+
+@keyframes ripple {
+  to {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding: 48px 24px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(37,211,102,0.06), rgba(7,94,84,0.06));
+}
+
+.empty-state-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37,211,102,0.14);
+  color: var(--primary);
+  font-size: 28px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+.empty-state-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.empty-state-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 360px;
+}
+
+.pulse-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(37,211,102,0.6);
+  animation: pulse 1.6s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(37,211,102,0.6); }
+  70% { box-shadow: 0 0 0 10px rgba(37,211,102,0); }
+  100% { box-shadow: 0 0 0 0 rgba(37,211,102,0); }
+}
 `;
 
 function getSidebar(activePage) {
@@ -1021,74 +1129,127 @@ function getLoginPage() {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
-    :root {
-      --primary: #075E54;
-      --primary-light: #128C7E;
-      --accent: #25D366;
-      --accent-hover: #1DA851;
-      --bg-main: #F7F8FA;
-      --bg-card: #FFFFFF;
-      --text-primary: #111B21;
-      --text-secondary: #667781;
-      --text-muted: #8696A0;
-      --border: #E9EDEF;
-      --danger: #EF4444;
-      --radius: 16px;
-      --radius-sm: 10px;
-      --shadow: 0 18px 40px rgba(7, 94, 84, 0.16);
-    }
+    :root { --primary: #0f766e; --primary-dark: #052e2b; --accent: #22c55e; --surface: #ffffff; --text: #052e2b; --muted: #6b7280; --border: #dbe7e3; --danger: #dc2626; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); color: var(--text-primary); padding: 24px; position: relative; overflow: hidden; }
-    body::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), transparent 25%), radial-gradient(circle at 80% 20%, rgba(255,255,255,0.11), transparent 22%); }
-    .container { width: min(100%, 440px); background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 36px; box-shadow: var(--shadow); position: relative; z-index: 1; animation: fadeInUp 0.36s ease; }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
-    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 13px; color: var(--primary); margin-bottom: 18px; }
-    .brand-badge { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), var(--primary)); color: white; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
-    h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; color: var(--text-primary); }
-    .subtitle { color: var(--text-secondary); line-height: 1.6; margin-bottom: 22px; font-size: 14px; }
+    body { font-family: 'Inter', sans-serif; min-height: 100vh; display: flex; background: linear-gradient(135deg, #f4fffa 0%, #eefbf5 100%); color: var(--text); }
+    .split-screen { display: grid; grid-template-columns: 1.05fr 0.95fr; width: 100%; min-height: 100vh; }
+    .brand-panel { background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%); color: white; padding: 48px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: hidden; }
+    .brand-panel::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 28%); }
+    .brand-panel > * { position: relative; z-index: 1; }
+    .brand-badge { width: 54px; height: 54px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.16); margin-bottom: 24px; }
+    .brand-panel h1 { font-size: 34px; font-weight: 800; margin-bottom: 10px; }
+    .brand-panel p { font-size: 16px; line-height: 1.7; opacity: 0.9; max-width: 460px; }
+    .feature-list { display: grid; gap: 14px; margin-top: 28px; }
+    .feature-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); }
+    .feature-icon { width: 36px; height: 36px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.16); }
+    .form-panel { display: flex; align-items: center; justify-content: center; padding: 32px; background: var(--surface); }
+    .form-card { width: min(100%, 420px); padding: 32px; border-radius: 24px; border: 1px solid var(--border); box-shadow: 0 24px 70px rgba(7, 94, 84, 0.08); background: white; }
+    .form-card h2 { font-size: 28px; font-weight: 800; margin-bottom: 8px; color: var(--text); }
+    .form-card .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
     .form-group { margin-bottom: 16px; }
-    label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: var(--text-secondary); }
-    input { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; background: #FAFBFC; color: var(--text-primary); font-size: 14px; transition: all 0.2s; }
-    input::placeholder { color: var(--text-muted); }
-    input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15); }
-    .btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 16px; border-radius: var(--radius-sm); border: none; background: linear-gradient(135deg, var(--accent), var(--primary)); color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(37, 211, 102, 0.22); }
-    .btn .spinner { display: none; }
+    .form-group label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+    .form-group input { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--text); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    .form-group input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34,197,85,0.15); }
+    .field-error { display: none; color: var(--danger); font-size: 12px; margin-top: 6px; }
+    .form-card.shake { animation: shake 0.4s ease; }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 50% { transform: translateX(8px); } 75% { transform: translateX(-6px); } }
+    .btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 16px; border-radius: 12px; border: none; background: linear-gradient(135deg, var(--accent), var(--primary)); color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative; overflow: hidden; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(34,197,85,0.25); }
+    .btn .spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.35); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
     .btn.loading .spinner { display: inline-block; }
     .btn.loading span { display: none; }
-    .footer { margin-top: 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
-    .footer a { color: var(--primary); text-decoration: none; font-weight: 700; }
-    .error { background: rgba(239, 68, 68, 0.08); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 16px; display: none; font-size: 13px; }
+    .auth-footer { margin-top: 18px; text-align: center; color: var(--muted); font-size: 13px; }
+    .auth-footer a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    .global-error { display: none; margin-bottom: 16px; padding: 10px 12px; border-radius: 12px; background: rgba(220,38,38,0.08); color: var(--danger); font-size: 13px; border: 1px solid rgba(220,38,38,0.18); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 900px) { .split-screen { grid-template-columns: 1fr; } .brand-panel { min-height: 280px; } }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="brand"><div class="brand-badge"><i data-lucide="message-circle" style="width:18px;height:18px"></i></div> BizChat AI</div>
-    <h1>Welcome Back</h1>
-    <p class="subtitle">Sign in to manage your WhatsApp AI assistant.</p>
-    <div id="error" class="error"></div>
-    <form id="loginForm">
-      <div class="form-group"><label for="email">Email</label><input type="email" id="email" required placeholder="hello@business.com"></div>
-      <div class="form-group"><label for="password">Password</label><input type="password" id="password" required placeholder="Your password"></div>
-      <button type="submit" class="btn"><span class="spinner"></span><span>Sign In</span></button>
-    </form>
-    <p class="footer">New here? <a href="/register">Create account</a></p>
+  <div class="split-screen">
+    <div class="brand-panel">
+      <div class="brand-badge"><i data-lucide="message-circle" style="width:24px;height:24px"></i></div>
+      <h1>BizChat AI</h1>
+      <p>Turn every WhatsApp conversation into a smart sales and support experience with a friendly AI assistant.</p>
+      <div class="feature-list">
+        <div class="feature-item"><div class="feature-icon"><i data-lucide="sparkles"></i></div><div><strong>Instant replies</strong><br>Answer customer questions quickly and consistently.</div></div>
+        <div class="feature-item"><div class="feature-icon"><i data-lucide="shopping-cart"></i></div><div><strong>Order capture</strong><br>Guide buyers through a smooth order experience.</div></div>
+        <div class="feature-item"><div class="feature-icon"><i data-lucide="bell"></i></div><div><strong>Owner alerts</strong><br>Notify you immediately when a lead or issue appears.</div></div>
+      </div>
+    </div>
+    <div class="form-panel">
+      <div class="form-card" id="loginCard">
+        <h2>Welcome back</h2>
+        <p class="subtitle">Access your dashboard and manage conversations.</p>
+        <div id="error" class="global-error"></div>
+        <form id="loginForm">
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="hello@business.com">
+            <div class="field-error" id="emailError">Please enter a valid email.</div>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Your password">
+            <div class="field-error" id="passwordError">Please enter your password.</div>
+          </div>
+          <button type="submit" class="btn"><span class="spinner"></span><span>Sign In</span></button>
+        </form>
+        <p class="auth-footer">New here? <a href="/register">Create account</a></p>
+      </div>
+    </div>
   </div>
   <script>
     lucide.createIcons();
+    function showFieldError(id, message) {
+      const field = document.getElementById(id);
+      const error = document.getElementById(id + 'Error');
+      if (field) field.style.borderColor = '#dc2626';
+      if (error) { error.textContent = message; error.style.display = 'block'; }
+    }
+    function clearFieldErrors() {
+      ['email', 'password'].forEach((id) => {
+        const field = document.getElementById(id);
+        const error = document.getElementById(id + 'Error');
+        if (field) field.style.borderColor = '#dbe7e3';
+        if (error) error.style.display = 'none';
+      });
+      document.getElementById('error').style.display = 'none';
+    }
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      clearFieldErrors();
       const btn = e.target.querySelector('.btn');
-      const error = document.getElementById('error');
-      error.style.display = 'none';
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      let hasError = false;
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showFieldError('email', 'Please enter a valid email.'); hasError = true; }
+      if (!password) { showFieldError('password', 'Please enter your password.'); hasError = true; }
+      if (hasError) {
+        document.getElementById('loginCard').classList.remove('shake');
+        void document.getElementById('loginCard').offsetWidth;
+        document.getElementById('loginCard').classList.add('shake');
+        return;
+      }
       btn.classList.add('loading');
       try {
-        const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: document.getElementById('email').value, password: document.getElementById('password').value }) });
+        const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
         const data = await res.json();
         if (data.success) window.location = '/dashboard';
-        else { error.textContent = data.error || 'Invalid credentials.'; error.style.display = 'block'; }
-      } catch (err) { error.textContent = 'Login failed.'; error.style.display = 'block'; }
-      finally { btn.classList.remove('loading'); }
+        else {
+          document.getElementById('error').textContent = data.error || 'Invalid credentials.';
+          document.getElementById('error').style.display = 'block';
+          document.getElementById('loginCard').classList.remove('shake');
+          void document.getElementById('loginCard').offsetWidth;
+          document.getElementById('loginCard').classList.add('shake');
+        }
+      } catch (err) {
+        document.getElementById('error').textContent = 'Login failed.';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('loginCard').classList.remove('shake');
+        void document.getElementById('loginCard').offsetWidth;
+        document.getElementById('loginCard').classList.add('shake');
+      } finally { btn.classList.remove('loading'); }
     });
   </script>
 </body>
@@ -1105,59 +1266,134 @@ function getRegisterPage() {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
-    :root { --primary: #0f766e; --accent: #14b8a6; --text: #f8fafc; --text-muted: #94a3b8; --bg: linear-gradient(135deg, #06121f 0%, #0f172a 50%, #1a1f2e 100%); --surface: rgba(15, 23, 42, 0.92); --border: rgba(20, 184, 166, 0.1); }
+    :root { --primary: #0f766e; --primary-dark: #052e2b; --accent: #22c55e; --surface: #ffffff; --text: #052e2b; --muted: #6b7280; --border: #dbe7e3; --danger: #dc2626; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Inter, system-ui, -apple-system, sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--text); padding: 24px; position: relative; }
-    body::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 20% 50%, rgba(20, 184, 166, 0.15), transparent 40%); }
-    .container { width: min(100%, 460px); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px 36px; backdrop-filter: blur(20px); box-shadow: 0 25px 50px rgba(15, 23, 42, 0.3); position: relative; z-index: 1; animation: fadeInUp 0.4s ease; }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; font-size: 12px; color: var(--accent); margin-bottom: 20px; }
-    h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
-    .subtitle { color: var(--text-muted); line-height: 1.6; margin-bottom: 28px; font-size: 14px; }
-    .form-group { margin-bottom: 20px; }
-    label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
-    input { width: 100%; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 10px; padding: 12px 14px; background: rgba(255,255,255,0.06); color: var(--text); font-size: 14px; transition: all 0.2s; }
-    input::placeholder { color: rgba(255,255,255,0.4); }
-    input:focus { outline: none; border-color: var(--accent); background: rgba(255,255,255,0.08); box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.1); }
-    .btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px; border-radius: 10px; border: none; background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 10px 25px rgba(20, 184, 166, 0.2); }
-    .btn .spinner { display: none; }
+    body { font-family: 'Inter', sans-serif; min-height: 100vh; display: flex; background: linear-gradient(135deg, #f4fffa 0%, #eefbf5 100%); color: var(--text); }
+    .split-screen { display: grid; grid-template-columns: 1.05fr 0.95fr; width: 100%; min-height: 100vh; }
+    .brand-panel { background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%); color: white; padding: 48px; display: flex; flex-direction: column; justify-content: center; position: relative; overflow: hidden; }
+    .brand-panel::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at top right, rgba(255,255,255,0.18), transparent 28%); }
+    .brand-panel > * { position: relative; z-index: 1; }
+    .brand-badge { width: 54px; height: 54px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.16); margin-bottom: 24px; }
+    .brand-panel h1 { font-size: 34px; font-weight: 800; margin-bottom: 10px; }
+    .brand-panel p { font-size: 16px; line-height: 1.7; opacity: 0.9; max-width: 460px; }
+    .feature-list { display: grid; gap: 14px; margin-top: 28px; }
+    .feature-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); }
+    .feature-icon { width: 36px; height: 36px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.16); }
+    .form-panel { display: flex; align-items: center; justify-content: center; padding: 32px; background: var(--surface); }
+    .form-card { width: min(100%, 420px); padding: 32px; border-radius: 24px; border: 1px solid var(--border); box-shadow: 0 24px 70px rgba(7, 94, 84, 0.08); background: white; }
+    .form-card h2 { font-size: 28px; font-weight: 800; margin-bottom: 8px; color: var(--text); }
+    .form-card .subtitle { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--text); }
+    .form-group input { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--text); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    .form-group input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34,197,85,0.15); }
+    .field-error { display: none; color: var(--danger); font-size: 12px; margin-top: 6px; }
+    .form-card.shake { animation: shake 0.4s ease; }
+    @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 50% { transform: translateX(8px); } 75% { transform: translateX(-6px); } }
+    .btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 16px; border-radius: 12px; border: none; background: linear-gradient(135deg, var(--accent), var(--primary)); color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; position: relative; overflow: hidden; }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(34,197,85,0.25); }
+    .btn .spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.35); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
     .btn.loading .spinner { display: inline-block; }
     .btn.loading span { display: none; }
-    .footer { margin-top: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
-    .footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
-    .error { background: rgba(220, 38, 38, 0.15); color: #fca5a5; border: 1px solid rgba(220, 38, 38, 0.3); padding: 12px; border-radius: 10px; margin-bottom: 20px; display: none; font-size: 13px; }
+    .auth-footer { margin-top: 18px; text-align: center; color: var(--muted); font-size: 13px; }
+    .auth-footer a { color: var(--primary); text-decoration: none; font-weight: 700; }
+    .global-error { display: none; margin-bottom: 16px; padding: 10px 12px; border-radius: 12px; background: rgba(220,38,38,0.08); color: var(--danger); font-size: 13px; border: 1px solid rgba(220,38,38,0.18); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 900px) { .split-screen { grid-template-columns: 1fr; } .brand-panel { min-height: 280px; } }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="brand"><div class="brand-badge"><i data-lucide="sparkles" style="width:18px;height:18px"></i></div> BizChat AI</div>
-    <h1>Create Account</h1>
-    <p class="subtitle">Start managing your WhatsApp AI assistant in minutes.</p>
-    <div id="error" class="error"></div>
-    <form id="registerForm">
-      <div class="form-group"><label for="shop_name">Business Name</label><input type="text" id="shop_name" required placeholder="e.g., Ahmed Electronics"></div>
-      <div class="form-group"><label for="email">Email</label><input type="email" id="email" required placeholder="hello@business.com"></div>
-      <div class="form-group"><label for="password">Password</label><input type="password" id="password" required placeholder="Create password"></div>
-      <button type="submit" class="btn"><span class="spinner"></span><span>Create Account</span></button>
-    </form>
-    <p class="footer">Already have an account? <a href="/login">Sign in</a></p>
+  <div class="split-screen">
+    <div class="brand-panel">
+      <div class="brand-badge"><i data-lucide="sparkles" style="width:24px;height:24px"></i></div>
+      <h1>BizChat AI</h1>
+      <p>Create your business account and start automating sales conversations in minutes.</p>
+      <div class="feature-list">
+        <div class="feature-item"><div class="feature-icon"><i data-lucide="message-circle"></i></div><div><strong>Smart inbox</strong><br>Keep every customer conversation organized.</div></div>
+        <div class="feature-item"><div class="feature-icon"><i data-lucide="shopping-bag"></i></div><div><strong>Order capture</strong><br>Collect orders and payments through chat.</div></div>
+        <div class="feature-item"><div class="feature-icon"><i data-lucide="shield-check"></i></div><div><strong>Owner control</strong><br>Work with your team and review everything from one place.</div></div>
+      </div>
+    </div>
+    <div class="form-panel">
+      <div class="form-card" id="registerCard">
+        <h2>Create account</h2>
+        <p class="subtitle">Set up your business profile and start chatting.</p>
+        <div id="error" class="global-error"></div>
+        <form id="registerForm">
+          <div class="form-group">
+            <label for="shop_name">Business Name</label>
+            <input type="text" id="shop_name" placeholder="e.g., Ahmed Electronics">
+            <div class="field-error" id="shopNameError">Please enter your business name.</div>
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="hello@business.com">
+            <div class="field-error" id="emailError">Please enter a valid email.</div>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Create password">
+            <div class="field-error" id="passwordError">Please create a password.</div>
+          </div>
+          <button type="submit" class="btn"><span class="spinner"></span><span>Create Account</span></button>
+        </form>
+        <p class="auth-footer">Already have an account? <a href="/login">Sign in</a></p>
+      </div>
+    </div>
   </div>
   <script>
     lucide.createIcons();
+    function showFieldError(id, message) {
+      const field = document.getElementById(id);
+      const error = document.getElementById(id + 'Error');
+      if (field) field.style.borderColor = '#dc2626';
+      if (error) { error.textContent = message; error.style.display = 'block'; }
+    }
+    function clearFieldErrors() {
+      ['shop_name', 'email', 'password'].forEach((id) => {
+        const field = document.getElementById(id);
+        const error = document.getElementById(id + 'Error');
+        if (field) field.style.borderColor = '#dbe7e3';
+        if (error) error.style.display = 'none';
+      });
+      document.getElementById('error').style.display = 'none';
+    }
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      clearFieldErrors();
       const btn = e.target.querySelector('.btn');
-      const error = document.getElementById('error');
-      error.style.display = 'none';
+      const shopName = document.getElementById('shop_name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      let hasError = false;
+      if (!shopName) { showFieldError('shop_name', 'Please enter your business name.'); hasError = true; }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showFieldError('email', 'Please enter a valid email.'); hasError = true; }
+      if (!password) { showFieldError('password', 'Please create a password.'); hasError = true; }
+      if (hasError) {
+        document.getElementById('registerCard').classList.remove('shake');
+        void document.getElementById('registerCard').offsetWidth;
+        document.getElementById('registerCard').classList.add('shake');
+        return;
+      }
       btn.classList.add('loading');
       try {
-        const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shop_name: document.getElementById('shop_name').value, email: document.getElementById('email').value, password: document.getElementById('password').value }) });
+        const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shop_name: shopName, email, password }) });
         const data = await res.json();
         if (data.success) window.location = '/settings';
-        else { error.textContent = data.error || 'Registration failed.'; error.style.display = 'block'; }
-      } catch (err) { error.textContent = 'Registration failed.'; error.style.display = 'block'; }
-      finally { btn.classList.remove('loading'); }
+        else {
+          document.getElementById('error').textContent = data.error || 'Registration failed.';
+          document.getElementById('error').style.display = 'block';
+          document.getElementById('registerCard').classList.remove('shake');
+          void document.getElementById('registerCard').offsetWidth;
+          document.getElementById('registerCard').classList.add('shake');
+        }
+      } catch (err) {
+        document.getElementById('error').textContent = 'Registration failed.';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('registerCard').classList.remove('shake');
+        void document.getElementById('registerCard').offsetWidth;
+        document.getElementById('registerCard').classList.add('shake');
+      } finally { btn.classList.remove('loading'); }
     });
   </script>
 </body>
@@ -1174,58 +1410,57 @@ function getDashboardPage() {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>${sharedStyles}
-    .hero-card { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%); color: white; border-radius: var(--radius); padding: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: var(--shadow-md); margin-bottom: 20px; }
-    .hero-eyebrow { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.8; margin-bottom: 6px; }
-    .hero-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-    .hero-copy { font-size: 14px; opacity: 0.9; }
-    .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: flex; align-items: flex-start; gap: 14px; transition: all 0.2s; box-shadow: var(--shadow-sm); }
-    .stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
-    .stat-icon { width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .stat-icon.primary { background: rgba(7, 94, 84, 0.1); color: var(--primary); }
-    .stat-icon.green { background: rgba(37, 211, 102, 0.12); color: var(--accent); }
-    .stat-icon.blue { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
-    .stat-icon.orange { background: rgba(249, 115, 22, 0.1); color: var(--warning); }
-    .stat-icon svg { width: 22px; height: 22px; }
-    .stat-content { flex: 1; }
-    .stat-value { font-size: 32px; font-weight: 700; color: var(--text-primary); line-height: 1; }
-    .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; font-weight: 600; }
-    .stat-trend { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 999px; background: rgba(37, 211, 102, 0.12); color: var(--accent); margin-top: 6px; display: inline-flex; align-items: center; gap: 3px; }
-    .middle-row, .bottom-row { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; margin-bottom: 20px; }
-    .panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+    .hero-card { background: linear-gradient(135deg, #052e2b 0%, #0f766e 50%, #22c55e 100%); color: white; border-radius: 24px; padding: 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; box-shadow: 0 24px 55px rgba(7, 94, 84, 0.2); margin-bottom: 18px; }
+    .hero-status { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.16); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+    .hero-title { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+    .hero-copy { font-size: 14px; opacity: 0.92; max-width: 680px; }
+    .stat-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 18px; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 18px; display: flex; gap: 14px; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
+    .stat-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); transform: translateX(-100%); pointer-events: none; }
+    .stat-card:hover::after { animation: shimmer 0.8s ease; }
+    .stat-card .icon-circle { width: 46px; height: 46px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; }
+    .stat-card:nth-child(1) .icon-circle { background: linear-gradient(135deg, #14b8a6, #0f766e); }
+    .stat-card:nth-child(2) .icon-circle { background: linear-gradient(135deg, #22c55e, #16a34a); }
+    .stat-card:nth-child(3) .icon-circle { background: linear-gradient(135deg, #4f8ef7, #2563eb); }
+    .stat-card:nth-child(4) .icon-circle { background: linear-gradient(135deg, #fbbf24, #f59e0b); }
+    .stat-value { font-size: 28px; font-weight: 800; color: var(--text-primary); line-height: 1; }
+    .stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 4px; font-weight: 700; }
+    .stat-trend { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .stat-card:nth-child(1) .stat-trend { background: rgba(20,184,166,0.12); color: #0f766e; }
+    .stat-card:nth-child(2) .stat-trend { background: rgba(34,197,85,0.12); color: #16a34a; }
+    .stat-card:nth-child(3) .stat-trend { background: rgba(59,130,246,0.12); color: #2563eb; }
+    .stat-card:nth-child(4) .stat-trend { background: rgba(245,158,11,0.12); color: #b45309; }
+    .middle-row, .bottom-row { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; margin-bottom: 16px; }
+    .panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-sm); }
     .panel-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-    .panel-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
-    .view-all { font-size: 12px; color: var(--primary); text-decoration: none; font-weight: 600; display: flex; align-items: center; gap: 4px; }
-    .conv-list { max-height: 320px; overflow-y: auto; }
-    .conv-item { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
-    .conv-item:hover { background: var(--bg-main); }
-    .conv-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, rgba(7,94,84,0.12), rgba(37,211,102,0.18)); display: flex; align-items: center; justify-content: center; color: var(--primary); font-weight: 700; font-size: 14px; flex-shrink: 0; }
+    .panel-title { font-size: 15px; font-weight: 800; color: var(--text-primary); }
+    .view-all { font-size: 12px; color: var(--primary); text-decoration: none; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+    .conv-list { max-height: 330px; overflow-y: auto; }
+    .conv-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .conv-item:last-child { border-bottom: none; }
+    .conv-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, rgba(15,118,110,0.16), rgba(34,197,85,0.2)); display: flex; align-items: center; justify-content: center; color: var(--primary); font-weight: 800; flex-shrink: 0; }
     .conv-info { flex: 1; min-width: 0; }
-    .conv-name { font-weight: 600; font-size: 13px; color: var(--text-primary); }
+    .conv-name { font-weight: 700; font-size: 13px; color: var(--text-primary); }
     .conv-preview { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
     .conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
     .conv-time { font-size: 11px; color: var(--text-muted); }
+    .unread-badge { padding: 3px 8px; border-radius: 999px; background: var(--accent); color: white; font-size: 10px; font-weight: 700; }
     .insight-list { padding: 8px 10px 10px; }
     .insight-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid var(--border); }
     .insight-icon { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--bg-main); font-size: 14px; }
     .insight-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
     .insight-text { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
     .insight-time { margin-left: auto; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-    .checklist-item { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; }
-    .checklist-item:hover { background: var(--bg-main); }
-    .check-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .checklist-item { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .checklist-item:last-child { border-bottom: none; }
+    .check-icon { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .check-icon.done { background: var(--success); color: white; }
     .check-icon.pending { background: var(--border); color: var(--text-muted); }
-    .check-icon svg { width: 12px; height: 12px; }
-    .check-info { flex: 1; }
-    .check-title { font-weight: 600; font-size: 13px; color: var(--text-primary); }
-    .check-hint { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
-    .check-arrow { color: var(--text-muted); }
-    .check-arrow svg { width: 16px; height: 16px; }
     .quick-stats { background: var(--bg-main); padding: 16px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .quick-stat { text-align: center; padding: 12px; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px solid var(--border); }
+    .quick-stat { text-align: center; padding: 12px; background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border); }
     .quick-stat-value { font-size: 16px; font-weight: 700; color: var(--text-primary); }
     .quick-stat-label { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+    @keyframes shimmer { 100% { transform: translateX(100%); } }
     @media (max-width: 1200px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } .middle-row, .bottom-row { grid-template-columns: 1fr; } }
     @media (max-width: 768px) { .hero-card { flex-direction: column; align-items: flex-start; } .stat-cards { grid-template-columns: 1fr; } .quick-stats { grid-template-columns: 1fr; } }
   </style>
@@ -1577,10 +1812,10 @@ function getSettingsPage() {
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>${sharedStyles}
     .settings-grid { display: grid; gap: 20px; }
-    .settings-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: all 0.2s; box-shadow: var(--shadow-sm); }
+    .settings-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; transition: all 0.2s; box-shadow: var(--shadow-sm); }
     .settings-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
     .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
-    .card-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(37, 211, 102, 0.12); color: var(--primary); }
+    .card-icon { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(20,184,166,0.16), rgba(34,197,85,0.16)); color: var(--primary); }
     .card-icon svg { width: 18px; height: 18px; }
     .card-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
     .card-body { padding: 20px; }
@@ -1588,7 +1823,7 @@ function getSettingsPage() {
     .form-group:last-child { margin-bottom: 0; }
     .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
     .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
-    textarea.input { min-height: 80px; resize: vertical; }
+    textarea.input { min-height: 84px; resize: vertical; }
     .service-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
     .service-row input { flex: 1; }
     .delete-row-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 8px; border-radius: var(--radius-sm); transition: all 0.2s; }
@@ -1616,7 +1851,15 @@ function getSettingsPage() {
 <body>
   ${getSidebar('settings')}
   <div class="main-content">
-    <div class="top-bar"><h1 class="page-title">Settings</h1></div>
+    <div class="top-bar">
+      <div>
+        <h1 class="page-title">Settings</h1>
+        <p style="margin:4px 0 0;font-size:13px;color:var(--text-muted);">Tune your business profile and WhatsApp experience.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);">
+        <span class="pulse-dot"></span>Updated instantly
+      </div>
+    </div>
     <div class="container">
       <div class="settings-grid">
         <!-- Business Identity -->
@@ -1771,18 +2014,25 @@ function getOrdersPage() {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>${sharedStyles}
-    .orders-table { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
-    table { width: 100%; border-collapse: collapse; }
-    thead { background: var(--bg-main); }
-    th { padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
-    td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
-    tr:hover { background: var(--bg-main); }
-    .status-select { padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; border: none; cursor: pointer; }
-    .status-select.new { background: rgba(249,115,22,0.12); color: var(--warning); }
-    .status-select.confirmed { background: rgba(59,130,246,0.12); color: #2563eb; }
-    .status-select.completed { background: rgba(37,211,102,0.14); color: var(--success); }
-    .status-select.cancelled { background: rgba(239,68,68,0.12); color: var(--danger); }
-    @media (max-width: 768px) { .orders-table { overflow-x: auto; display: block; } }
+    .orders-shell { display: flex; flex-direction: column; gap: 16px; }
+    .filter-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .filter-pill { border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); padding: 8px 12px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 700; }
+    .filter-pill.active { background: linear-gradient(135deg, var(--accent), var(--primary)); color: white; border-color: transparent; }
+    .board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+    .board-column { background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 14px; min-height: 280px; box-shadow: var(--shadow-sm); }
+    .board-title { font-size: 14px; font-weight: 800; margin-bottom: 10px; color: var(--text-primary); }
+    .order-card { background: linear-gradient(180deg, #fdfefe 0%, #f8fcfa 100%); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px; position: relative; overflow: hidden; }
+    .order-card .status-chip { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+    .status-chip.pending { background: rgba(245,158,11,0.12); color: #b45309; }
+    .status-chip.confirmed { background: rgba(37,211,102,0.12); color: #15803d; }
+    .status-chip.preparing { background: rgba(59,130,246,0.12); color: #2563eb; }
+    .status-chip.delivery { background: rgba(99,102,241,0.12); color: #4338ca; }
+    .status-chip.delivered { background: rgba(6,95,70,0.16); color: #065f46; }
+    .order-title { font-weight: 700; margin-bottom: 6px; color: var(--text-primary); }
+    .order-detail { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+    .order-action { margin-top: 10px; width: 100%; padding: 8px 10px; border: none; border-radius: 10px; background: var(--bg-main); color: var(--primary); font-weight: 700; cursor: pointer; }
+    @media (max-width: 1024px) { .board { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 768px) { .board { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -1790,13 +2040,81 @@ function getOrdersPage() {
   <div class="main-content">
     <div class="top-bar"><h1 class="page-title">Orders</h1></div>
     <div class="container">
-      <div id="ordersContent"></div>
+      <div class="orders-shell">
+        <div class="filter-row">
+          <button class="filter-pill active" data-filter="all">All</button>
+          <button class="filter-pill" data-filter="pending">Pending</button>
+          <button class="filter-pill" data-filter="active">Active</button>
+          <button class="filter-pill" data-filter="completed">Completed</button>
+          <button class="filter-pill" data-filter="cancelled">Cancelled</button>
+        </div>
+        <div id="ordersContent"></div>
+      </div>
     </div>
   </div>
   <div id="toast" class="toast"></div>
   <script>
     lucide.createIcons();
+    let currentFilter = 'all';
     function showToast(message, type = 'success') { const toast = document.getElementById('toast'); toast.textContent = message; toast.className = 'toast show ' + type; setTimeout(() => { toast.className = 'toast'; }, 3000); }
+    function getStatusGroup(status) {
+      const normalized = String(status || '').toLowerCase();
+      if (['new', 'payment_pending', 'pending'].includes(normalized)) return 'pending';
+      if (['confirmed', 'preparing', 'out_for_delivery', 'delivery', 'active'].includes(normalized)) return 'active';
+      if (['completed', 'delivered'].includes(normalized)) return 'completed';
+      if (['cancelled', 'canceled'].includes(normalized)) return 'cancelled';
+      return 'pending';
+    }
+    function getStatusLabel(status) {
+      const normalized = String(status || '').toLowerCase();
+      if (['new', 'payment_pending', 'pending'].includes(normalized)) return 'Pending';
+      if (['confirmed'].includes(normalized)) return 'Confirmed';
+      if (['preparing'].includes(normalized)) return 'Preparing';
+      if (['out_for_delivery', 'delivery'].includes(normalized)) return 'Out for Delivery';
+      if (['completed', 'delivered'].includes(normalized)) return 'Delivered';
+      return 'Pending';
+    }
+    function getStatusChipClass(status) {
+      const normalized = String(status || '').toLowerCase();
+      if (['new', 'payment_pending', 'pending'].includes(normalized)) return 'pending';
+      if (['confirmed'].includes(normalized)) return 'confirmed';
+      if (['preparing'].includes(normalized)) return 'preparing';
+      if (['out_for_delivery', 'delivery'].includes(normalized)) return 'delivery';
+      if (['completed', 'delivered'].includes(normalized)) return 'delivered';
+      return 'pending';
+    }
+    function renderOrders(orders) {
+      const content = document.getElementById('ordersContent');
+      const filtered = orders.filter((order) => currentFilter === 'all' || getStatusGroup(order.status) === currentFilter);
+      const groups = { pending: [], active: [], completed: [], cancelled: [] };
+      filtered.forEach((order) => { groups[getStatusGroup(order.status)] = groups[getStatusGroup(order.status)] || []; groups[getStatusGroup(order.status)].push(order); });
+      const columns = [
+        { key: 'pending', title: 'Pending' },
+        { key: 'active', title: 'Active' },
+        { key: 'completed', title: 'Completed' },
+        { key: 'cancelled', title: 'Cancelled' }
+      ];
+      content.innerHTML = '<div class="board">' + columns.map((column) => {
+        const items = groups[column.key] || [];
+        const cards = items.length ? items.map((order) => {
+          const itemMatch = String(order.order_details || '').match(/Item:\s*(.+)/i);
+          const amountMatch = String(order.order_details || '').match(/Amount:\s*([0-9,]+)/i);
+          const itemName = itemMatch ? itemMatch[1].trim() : 'Order request';
+          const amount = amountMatch ? 'PKR ' + amountMatch[1] : '';
+          const conversationUrl = order.conversation_id ? '/conversations/' + order.conversation_id : '/conversations';
+          return '<div class="order-card">' +
+            '<div class="status-chip ' + getStatusChipClass(order.status) + '">' + getStatusLabel(order.status) + '</div>' +
+            '<div class="order-title">' + escapeHtml(order.customer_phone || 'Customer') + '</div>' +
+            '<div class="order-detail">Item: ' + escapeHtml(itemName) + '</div>' +
+            '<div class="order-detail">Placed: ' + escapeHtml(new Date(order.created_at || Date.now()).toLocaleString()) + '</div>' +
+            '<div class="order-detail">Amount: ' + escapeHtml(amount || 'Pending') + '</div>' +
+            '<button class="order-action" onclick="window.location=\'' + conversationUrl + '\'">View Conversation</button>' +
+            '</div>';
+        }).join('') : '<div class="empty-state" style="padding:18px;border:none;background:transparent;box-shadow:none;"><div class="empty-state-icon">📦</div><div class="empty-state-title">No orders</div><div class="empty-state-text">Orders will appear here once customers place them.</div></div>';
+        return '<div class="board-column"><div class="board-title">' + column.title + '</div>' + cards + '</div>';
+      }).join('') + '</div>';
+      lucide.createIcons();
+    }
     async function loadOrders() {
       try {
         const meRes = await fetch('/api/auth/me');
@@ -1804,10 +2122,19 @@ function getOrdersPage() {
         const me = await meRes.json();
         document.getElementById('businessNameSidebar').textContent = me.shop_name || 'Business';
         document.getElementById('userAvatar').textContent = (me.shop_name || 'B').charAt(0).toUpperCase();
-        const content = document.getElementById('ordersContent');
-        content.innerHTML = '<div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><div class="empty-state-title">No orders yet</div><div class="empty-state-text">When customers place orders via WhatsApp, they will appear here.</div><a href="/settings" class="btn btn-secondary" style="margin-top:16px;">Configure Order Settings</a></div>';
+        const orders = await fetch('/api/orders').then(r => r.json());
+        renderOrders(orders);
+        document.querySelectorAll('.filter-pill').forEach((button) => {
+          button.addEventListener('click', () => {
+            document.querySelectorAll('.filter-pill').forEach((pill) => pill.classList.remove('active'));
+            button.classList.add('active');
+            currentFilter = button.getAttribute('data-filter');
+            renderOrders(orders);
+          });
+        });
       } catch (err) { console.error(err); }
     }
+    function escapeHtml(text) { if (!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
     async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location = '/login'; }
     loadOrders();
   </script>
