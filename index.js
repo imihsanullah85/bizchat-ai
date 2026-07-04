@@ -115,6 +115,18 @@ async function getRecentInsightsForBusiness(businessId, limit = 5) {
   return rows;
 }
 
+async function hasRecentConversationInsight(conversationId, insightType, minutes = 120) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM conversation_insights
+     WHERE conversation_id = $1
+       AND insight_type = $2
+       AND created_at >= NOW() - INTERVAL '1 minute' * $3
+     LIMIT 1`,
+    [conversationId, insightType, minutes]
+  );
+  return rows.length > 0;
+}
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -186,11 +198,16 @@ async function handleWhatsAppMessage(msg, value) {
       human: 'handoff_requested'
     };
     const insightType = insightTypeMap[notificationType] || notificationType;
-    await insertConversationInsight(business.id, conversation.id, customerPhone, insightType, messageText);
+    const recentInsight = await hasRecentConversationInsight(conversation.id, insightType, 120);
+    if (!recentInsight) {
+      await insertConversationInsight(business.id, conversation.id, customerPhone, insightType, messageText);
+      await notifyOwner(business.owner_whatsapp, notificationType, customerPhone, messageText);
+    } else {
+      console.log(`Skipping duplicate ${insightType} notification for conversation ${conversation.id}`);
+    }
     const customerAutoReply = "Thanks for reaching out! I've notified our team and someone will get back to you shortly. In the meantime, is there anything else I can help you with?";
     await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, customerAutoReply);
     await insertMessage(conversation.id, 'out', customerAutoReply);
-    await notifyOwner(business.owner_whatsapp, notificationType, customerPhone, messageText);
   }
 
   const aiResponse = await generateAIResponse(business, messageText);
@@ -283,12 +300,12 @@ function normalizeOwnerWhatsAppNumber(value) {
 
 function detectOwnerNotificationType(messageText) {
   const text = (messageText || '').toLowerCase();
+  const humanKeywords = ['speak to human', 'talk to owner', 'real person', 'manager', 'call me', 'phone number', 'speak to someone', 'talk to someone'];
+  const attentionKeywords = ['not working', 'problem', 'issue', 'complaint', 'wrong', 'bad', 'disappointed', 'refund', 'cancel', 'not happy', 'i am angry', 'doesn\'t work', 'doesnt work'];
   const orderKeywords = ['order', 'book', 'appointment', 'buy', 'purchase', 'i want', 'i need', "i'll take", 'how do i pay', 'payment', 'reserve', 'confirm'];
-  const attentionKeywords = ['not working', 'problem', 'issue', 'complaint', 'wrong', 'bad', 'disappointed', 'refund', 'cancel', 'not happy', 'i am angry'];
-  const humanKeywords = ['speak to human', 'talk to owner', 'real person', 'manager', 'call me', 'phone number', 'speak to someone'];
-  if (orderKeywords.some(keyword => text.includes(keyword))) return 'order';
-  if (attentionKeywords.some(keyword => text.includes(keyword))) return 'attention';
   if (humanKeywords.some(keyword => text.includes(keyword))) return 'human';
+  if (attentionKeywords.some(keyword => text.includes(keyword))) return 'attention';
+  if (orderKeywords.some(keyword => text.includes(keyword))) return 'order';
   return null;
 }
 
