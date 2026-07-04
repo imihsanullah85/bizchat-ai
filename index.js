@@ -183,7 +183,12 @@ app.post('/webhook', async (req, res) => {
     for (const entry of data.entry || []) {
       for (const change of entry.changes || []) {
         for (const msg of change.value.messages || []) {
-          await handleWhatsAppMessage(msg, change.value);
+          const senderPhone = msg?.from || 'unknown';
+          try {
+            await handleWhatsAppMessage(msg, change.value);
+          } catch (error) {
+            console.error('Message handling error (non-fatal):', error.message, 'Customer:', senderPhone);
+          }
         }
       }
     }
@@ -497,30 +502,60 @@ async function handleWhatsAppMessage(msg, value) {
   const customerName = msg.profile?.name || 'Customer';
   if (!messageContent) return;
 
-  const business = await getBusinessByWhatsAppPhoneId(businessPhoneId);
+  let business;
+  try {
+    business = await getBusinessByWhatsAppPhoneId(businessPhoneId);
+  } catch (error) {
+    console.error('Business lookup error (non-fatal):', error.message, 'Customer:', customerPhone);
+    return;
+  }
   if (!business) { console.log('No business found for phone ID:', businessPhoneId); return; }
 
   const normalizedSender = normalizePhoneNumber(customerPhone);
   const normalizedOwner = normalizePhoneNumber(business.owner_whatsapp);
   if (normalizedSender && normalizedOwner && normalizedSender === normalizedOwner) {
-    await handleOwnerCommand(msg, business);
+    try {
+      await handleOwnerCommand(msg, business);
+    } catch (error) {
+      console.error('Owner command handling error (non-fatal):', error.message, 'Customer:', customerPhone);
+    }
     return;
   }
 
-  const conversation = await ensureConversation(business.id, customerPhone, customerName);
-  await insertMessage(conversation.id, 'in', messageContent);
+  let conversation;
+  try {
+    conversation = await ensureConversation(business.id, customerPhone, customerName);
+  } catch (error) {
+    console.error('Conversation creation error (non-fatal):', error.message, 'Customer:', customerPhone);
+    return;
+  }
+
+  try {
+    await insertMessage(conversation.id, 'in', messageContent);
+  } catch (error) {
+    console.error('Inbound message insert error (non-fatal):', error.message, 'Customer:', customerPhone);
+  }
 
   if (conversation.order_flow_state) {
-    const handled = await handleOrderFlowMessage(msg, value, conversation, business);
-    if (handled) return;
+    try {
+      const handled = await handleOrderFlowMessage(msg, value, conversation, business);
+      if (handled) return;
+    } catch (error) {
+      console.error('Order flow handling error (non-fatal):', error.message, 'Customer:', customerPhone);
+    }
   }
 
   if (!conversation.order_flow_state && isBuyingIntent(messageText)) {
-    await updateConversationOrderFlow(conversation.id, 'collecting_item', {});
-    const prompt = "I'd love to help you place an order! 🛍️\nWhat would you like to order? Please mention the item name and any specific details.";
-    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
-    await insertMessage(conversation.id, 'out', prompt);
-    return;
+    try {
+      await updateConversationOrderFlow(conversation.id, 'collecting_item', {});
+      const prompt = "I'd love to help you place an order! 🛍️\nWhat would you like to order? Please mention the item name and any specific details.";
+      await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, prompt);
+      await insertMessage(conversation.id, 'out', prompt);
+      return;
+    } catch (error) {
+      console.error('Order intake error (non-fatal):', error.message, 'Customer:', customerPhone);
+      return;
+    }
   }
 
   const notificationType = detectOwnerNotificationType(messageText);
@@ -532,27 +567,35 @@ async function handleWhatsAppMessage(msg, value) {
       human: 'handoff_requested'
     };
     const insightType = insightTypeMap[notificationType] || notificationType;
-    const recentInsight = await hasRecentConversationInsight(conversation.id, insightType, 120);
-    if (!recentInsight) {
-      await insertConversationInsight(business.id, conversation.id, customerPhone, insightType, messageText);
-      await notifyOwner(business.owner_whatsapp, notificationType, customerPhone, messageText);
-    } else {
-      console.log(`Skipping duplicate ${insightType} notification for conversation ${conversation.id}`);
+    try {
+      const recentInsight = await hasRecentConversationInsight(conversation.id, insightType, 120);
+      if (!recentInsight) {
+        await insertConversationInsight(business.id, conversation.id, customerPhone, insightType, messageText);
+        await notifyOwner(business.owner_whatsapp, notificationType, customerPhone, messageText);
+      } else {
+        console.log(`Skipping duplicate ${insightType} notification for conversation ${conversation.id}`);
+      }
+      const customerAutoReply = "Thanks for reaching out! I've notified our team and someone will get back to you shortly. In the meantime, is there anything else I can help you with?";
+      await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, customerAutoReply);
+      await insertMessage(conversation.id, 'out', customerAutoReply);
+    } catch (error) {
+      console.error('Notification handling error (non-fatal):', error.message, 'Customer:', customerPhone);
     }
-    const customerAutoReply = "Thanks for reaching out! I've notified our team and someone will get back to you shortly. In the meantime, is there anything else I can help you with?";
-    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, customerAutoReply);
-    await insertMessage(conversation.id, 'out', customerAutoReply);
   }
 
-  const recentMessages = await getLastMessagesForConversation(conversation.id, 10);
-  const conversationHistory = recentMessages.map((entry) => {
-    const role = entry.direction === 'out' ? 'assistant' : 'user';
-    return { role, content: entry.content };
-  });
+  try {
+    const recentMessages = await getLastMessagesForConversation(conversation.id, 10);
+    const conversationHistory = recentMessages.map((entry) => {
+      const role = entry.direction === 'out' ? 'assistant' : 'user';
+      return { role, content: entry.content };
+    });
 
-  const aiResponse = await generateAIResponse(business, conversationHistory);
-  await insertMessage(conversation.id, 'out', aiResponse);
-  await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, aiResponse);
+    const aiResponse = await generateAIResponse(business, conversationHistory);
+    await insertMessage(conversation.id, 'out', aiResponse);
+    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, aiResponse);
+  } catch (error) {
+    console.error('AI response handling error (non-fatal):', error.message, 'Customer:', customerPhone);
+  }
 }
 
 async function generateAIResponse(business, conversationHistory) {
@@ -2229,6 +2272,14 @@ function getAnalyticsPage() {
 </body>
 </html>`;
 }
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+});
 
 // Start server
 async function startServer() {
