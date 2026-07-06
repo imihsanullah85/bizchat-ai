@@ -956,7 +956,7 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
 // PAGE ROUTES
 // ============================================
 
-app.get('/', (req, res) => { req.session.businessId ? res.redirect('/dashboard') : res.redirect('/login'); });
+app.get('/', (req, res) => { req.session.businessId ? res.redirect('/dashboard') : res.send(getLandingPage()); });
 app.get('/login', (req, res) => { res.send(getLoginPage()); });
 app.get('/register', (req, res) => { res.send(getRegisterPage()); });
 app.get('/dashboard', (req, res) => { if (!req.session.businessId) return res.redirect('/login'); res.send(getDashboardPage()); });
@@ -1552,6 +1552,274 @@ function getRegisterPage() {
         document.getElementById('registerCard').classList.add('shake');
       }
     });
+  </script>
+</body>
+</html>`;
+}
+
+function getLandingPage() {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BizChat AI — AI WhatsApp assistant for Pakistani businesses</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    :root{
+      --primary:#075E54;
+      --accent:#25D366;
+      --bg-main:#F7F8FA;
+      --text-primary:#111B21;
+      --muted:#667781;
+      --card:#ffffff;
+      --shadow:0 6px 24px rgba(7,94,84,0.07);
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:var(--text-primary);background:var(--bg-main);-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}
+    /* NAVBAR */
+    .nav{position:sticky;top:0;z-index:60;background:var(--card);box-shadow:0 2px 8px rgba(16,24,32,0.06);backdrop-filter:saturate(140%) blur(4px)}
+    .nav-inner{max-width:1200px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand-badge{width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg,var(--accent),var(--primary));display:inline-flex;align-items:center;justify-content:center;color:white;font-weight:800}
+    .brand-title{font-weight:800;font-size:18px}
+    .nav-links{display:flex;align-items:center;gap:14px}
+    .nav-links a{font-weight:600;color:var(--muted);padding:8px}
+    .btn{font-weight:700;border-radius:10px;padding:10px 14px;border:0;cursor:pointer}
+    .btn-ghost{background:transparent;border:1px solid rgba(7,94,84,0.06);color:var(--primary)}
+    .btn-primary{background:var(--accent);color:white;box-shadow:0 8px 24px rgba(37,211,102,0.12)}
+    .mobile-toggle{display:none}
+    /* HERO */
+    .hero{max-width:1200px;margin:36px auto;padding:40px 20px;display:grid;grid-template-columns:1fr 420px;gap:32px;align-items:center}
+    .hero-left{background:white;border-radius:18px;padding:40px;box-shadow:var(--shadow)}
+    .hero h1{font-size:44px;line-height:1.02;margin:0 0 12px;font-weight:800;color:var(--text-primary)}
+    .hero p{margin:0 0 20px;color:var(--muted);font-size:16px}
+    .hero-ctas{display:flex;gap:12px;margin-bottom:14px}
+    .benefits{color:var(--muted);font-size:14px;display:flex;gap:18px;margin-top:10px}
+    /* CHAT MOCK */
+    .mock{background:#f8fff6;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px;border:1px solid rgba(0,0,0,0.03)}
+    .bubble{max-width:78%;padding:10px 12px;border-radius:18px;font-size:14px;line-height:1.3}
+    .from{background:white;align-self:flex-start;border-bottom-left-radius:4px}
+    .bot{background:var(--whatsapp,#DCF8C6);align-self:flex-end;border-bottom-right-radius:4px;color:#001b00}
+    .meta{font-size:11px;color:var(--muted);opacity:0.85;margin-top:6px}
+    /* SOCIAL PROOF */
+    .proof{max-width:1200px;margin:18px auto;padding:20px;background:#fbfdfe;border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+    .proof-icons{display:flex;gap:18px;align-items:center}
+    .proof-item{display:flex;flex-direction:column;align-items:center;font-size:13px;color:var(--muted)}
+    /* HOW IT WORKS */
+    .steps{max-width:1000px;margin:24px auto;padding:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .step{background:white;border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(16,24,32,0.04);text-align:left}
+    .step .num{width:44px;height:44px;border-radius:999px;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;color:white;font-weight:800;margin-bottom:12px}
+    .step h3{margin:0 0 8px}
+    .features{max-width:1100px;margin:28px auto;padding:20px}
+    .features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .card{background:white;border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(16,24,32,0.04)}
+    .card .icon{width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg,var(--accent),#10b981);display:inline-flex;align-items:center;justify-content:center;color:white;margin-bottom:12px}
+    /* PRICING */
+    .pricing{max-width:1100px;margin:28px auto;padding:20px}
+    .pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .price-card{background:white;border-radius:12px;padding:20px;border:1px solid rgba(7,94,84,0.04);text-align:left}
+    .price-card.featured{transform:scale(1.03);border-color:var(--accent);box-shadow:0 12px 40px rgba(37,211,102,0.08)}
+    .badge{display:inline-block;padding:6px 10px;border-radius:999px;font-weight:700;background:rgba(37,211,102,0.12);color:var(--accent);margin-bottom:12px}
+    .price{font-size:28px;font-weight:800;margin:8px 0}
+    .price-list{list-style:none;padding:0;margin:12px 0 18px}
+    .price-list li{margin:8px 0;color:var(--muted)}
+    /* FAQ */
+    .faq{max-width:900px;margin:28px auto;padding:20px}
+    .accordion{background:white;border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(16,24,32,0.04)}
+    .q{padding:12px;border-bottom:1px solid rgba(16,24,32,0.04);cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+    .a{padding:12px 12px 18px;display:none;color:var(--muted)}
+    /* CTA banner */
+    .cta{margin:28px auto;padding:36px;border-radius:12px;background:linear-gradient(90deg,var(--primary),#128C7E);color:white;text-align:center}
+    .footer{background:#111B21;color:white;padding:32px 20px;margin-top:28px}
+    .footer-inner{max-width:1100px;margin:0 auto;display:flex;gap:20px;flex-wrap:wrap;justify-content:space-between}
+    .bottom{border-top:1px solid rgba(255,255,255,0.04);padding-top:14px;margin-top:18px;text-align:center;font-size:13px;color:rgba(255,255,255,0.7)}
+    /* Responsive */
+    @media (max-width:900px){.hero{grid-template-columns:1fr;gap:18px}.nav-links{display:none}.mobile-toggle{display:block}.steps{grid-template-columns:1fr}.features-grid{grid-template-columns:1fr}.pricing-grid{grid-template-columns:1fr}}
+    /* Smooth scroll */
+    html{scroll-behavior:smooth}
+  </style>
+</head>
+<body>
+  <header class="nav" id="siteNav">
+    <div class="nav-inner">
+      <div class="brand"><div class="brand-badge">B</div><div class="brand-title">BizChat AI</div></div>
+      <nav class="nav-links" id="navLinks">
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a class="btn btn-ghost" href="/login">Login</a>
+        <a class="btn btn-primary" href="/register">Start Free Trial</a>
+      </nav>
+      <button class="mobile-toggle btn btn-ghost" id="mobileBtn"><span data-lucide="menu"></span></button>
+    </div>
+    <div id="mobileMenu" style="display:none;background:var(--card);padding:12px;box-shadow:var(--shadow)"></div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-left">
+        <h1>Your AI-Powered WhatsApp Employee for Pakistani Businesses</h1>
+        <p>BizChat AI answers customer questions, takes orders, and notifies you instantly — 24 hours a day, 7 days a week, automatically.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary" href="/register">Start Free Trial</a>
+          <button class="btn btn-ghost" id="watchDemo">Watch Demo</button>
+        </div>
+        <div class="benefits">
+          <div>✓ No credit card required</div>
+          <div>✓ Setup in 10 minutes</div>
+          <div>✓ Cancel anytime</div>
+        </div>
+      </div>
+      <aside>
+        <div class="mock" aria-hidden>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px">WhatsApp • 10:32 AM</div>
+          <div class="bubble from">Bhai iPhone 14 ki price kya hai?</div>
+          <div class="meta" style="align-self:flex-start">10:31 AM</div>
+          <div class="bubble bot">Assalam u Alaikum! iPhone 14 hamare paas PKR 229,000 mein available hai. Kya aap order karna chahenge? 😊</div>
+          <div class="meta" style="align-self:flex-end">10:31 AM</div>
+          <div class="bubble from">Haan, order karna hai</div>
+          <div class="meta">10:32 AM</div>
+          <div class="bubble bot">Bohat acha! Main aapka order note kar leta hoon. Aapka naam aur delivery address bata dein please.</div>
+          <div class="meta" style="align-self:flex-end">10:32 AM</div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="proof">
+      <div style="font-weight:700">Trusted by businesses across Pakistan</div>
+      <div class="proof-icons">
+        <div class="proof-item">📱<div>Phone Shops</div></div>
+        <div class="proof-item">🍽️<div>Restaurants</div></div>
+        <div class="proof-item">🏥<div>Clinics</div></div>
+        <div class="proof-item">💇<div>Salons</div></div>
+        <div class="proof-item">🛍️<div>Retail Stores</div></div>
+      </div>
+    </section>
+
+    <section class="steps" aria-label="How it works">
+      <div class="step"><div class="num">1</div><div data-lucide="user-plus" style="float:right"></div><h3>Sign up in 60 seconds</h3><p>Create your free account and enter your business details — no technical knowledge needed.</p></div>
+      <div class="step"><div class="num">2</div><div data-lucide="smartphone" style="float:right"></div><h3>Connect your WhatsApp</h3><p>Share your WhatsApp number with us. We set up your AI assistant within 24 hours.</p></div>
+      <div class="step"><div class="num">3</div><div data-lucide="zap" style="float:right"></div><h3>Go live automatically</h3><p>Your AI starts answering customers instantly. You get notified for every order and hot lead.</p></div>
+    </section>
+
+    <section id="features" class="features">
+      <h2 style="font-size:22px;margin-bottom:8px">Everything your business needs</h2>
+      <p style="color:var(--muted);margin-bottom:16px">Built specifically for Pakistani SMBs</p>
+      <div class="features-grid">
+        <div class="card"><div class="icon"><i data-lucide="message-circle"></i></div><h4>24/7 Auto Replies</h4><p style="color:var(--muted)">Never miss a customer message again. Your AI replies instantly at 2am, on Eid, always.</p></div>
+        <div class="card"><div class="icon" style="background:linear-gradient(180deg,#4f8ef7,#2563eb)"><i data-lucide="shopping-cart"></i></div><h4>Order Management</h4><p style="color:var(--muted)">Customers place orders via WhatsApp. You confirm from your dashboard or phone.</p></div>
+        <div class="card"><div class="icon" style="background:linear-gradient(180deg,#f59e0b,#fb923c)"><i data-lucide="bell"></i></div><h4>Instant Owner Alerts</h4><p style="color:var(--muted)">Get a WhatsApp notification the moment a customer shows buying intent.</p></div>
+        <div class="card"><div class="icon" style="background:linear-gradient(180deg,#7c3aed,#8b5cf6)"><i data-lucide="globe"></i></div><h4>Urdu + English</h4><p style="color:var(--muted)">Replies in the customer's language automatically. No setup needed.</p></div>
+        <div class="card"><div class="icon" style="background:linear-gradient(180deg,var(--accent),#16a34a)"><i data-lucide="bar-chart-2"></i></div><h4>Business Analytics</h4><p style="color:var(--muted)">See your busiest hours, top questions, and conversion rates in one dashboard.</p></div>
+        <div class="card"><div class="icon" style="background:linear-gradient(180deg,#0f766e,#064e49)"><i data-lucide="shield"></i></div><h4>Owner Command Mode</h4><p style="color:var(--muted)">Text 'stats' or 'orders' to your own business number and get instant reports on WhatsApp.</p></div>
+      </div>
+    </section>
+
+    <section id="pricing" class="pricing">
+      <h2 style="font-size:22px;margin-bottom:8px">Simple, transparent pricing</h2>
+      <p style="color:var(--muted);margin-bottom:16px">Start free. Upgrade when you're ready.</p>
+      <div class="pricing-grid">
+        <div class="price-card">
+          <div class="badge">Perfect to start</div>
+          <div class="price">PKR 3,000 <span style="font-size:14px;color:var(--muted);font-weight:600">/ month</span></div>
+          <ul class="price-list"><li>✓ 1 WhatsApp number</li><li>✓ Up to 500 messages/month</li><li>✓ Auto replies in Urdu + English</li><li>✓ Basic dashboard</li><li>✓ Email support</li></ul>
+          <a class="btn btn-ghost" href="/register">Start Free Trial</a>
+        </div>
+        <div class="price-card featured">
+          <div class="badge" style="background:var(--accent);color:white">Most Popular</div>
+          <div class="price">PKR 6,000 <span style="font-size:14px;color:var(--muted);font-weight:600">/ month</span></div>
+          <ul class="price-list"><li>✓ 1 WhatsApp number</li><li>✓ Unlimited messages</li><li>✓ Order management</li><li>✓ Owner WhatsApp alerts</li><li>✓ Analytics dashboard</li><li>✓ Owner command mode</li><li>✓ Priority support</li></ul>
+          <a class="btn btn-primary" href="/register">Start Free Trial</a>
+        </div>
+        <div class="price-card">
+          <div class="badge">For scaling businesses</div>
+          <div class="price">PKR 12,000 <span style="font-size:14px;color:var(--muted);font-weight:600">/ month</span></div>
+          <ul class="price-list"><li>✓ Up to 3 WhatsApp numbers</li><li>✓ Unlimited messages</li><li>✓ Everything in Growth</li><li>✓ Multi-branch support</li><li>✓ Custom AI personality</li><li>✓ Dedicated support</li></ul>
+          <a class="btn btn-ghost" href="https://wa.me/923002791485">Contact Us</a>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:12px;color:var(--muted)">All plans include a 14-day free trial. No credit card required.</div>
+    </section>
+
+    <section class="faq">
+      <h3>Frequently asked questions</h3>
+      <div class="accordion">
+        <div class="q">Do I need technical knowledge to set up BizChat AI?<span>+</span></div>
+        <div class="a">Not at all. You just sign up, fill in your business details, and share your WhatsApp number with us. We handle the technical setup within 24 hours.</div>
+        <div class="q">Will the bot replace my staff?<span>+</span></div>
+        <div class="a">BizChat AI handles routine questions and order collection automatically, freeing your staff to focus on what matters. You stay in control and can take over any conversation anytime.</div>
+        <div class="q">What if a customer asks something the bot doesn't know?<span>+</span></div>
+        <div class="a">The bot politely tells the customer to contact you directly and simultaneously sends you a WhatsApp alert so you can respond personally.</div>
+        <div class="q">Is my business data secure?<span>+</span></div>
+        <div class="a">Yes. Your business information and customer conversations are stored securely and are never shared with other businesses.</div>
+        <div class="q">Can I cancel anytime?<span>+</span></div>
+        <div class="a">Yes. No contracts, no cancellation fees. Cancel anytime from your dashboard.</div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <h2 style="margin:0 0 8px">Ready to automate your WhatsApp customer service?</h2>
+      <p style="margin:0 0 16px">Join hundreds of Pakistani businesses saving 3+ hours every day</p>
+      <a class="btn" style="background:white;color:var(--primary);padding:14px 20px;border-radius:10px;font-weight:800" href="/register">Start Your Free Trial Today</a>
+      <div style="margin-top:10px;color:white;opacity:0.9">Setup takes less than 10 minutes</div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px"><div class="brand-badge">B</div><div style="font-weight:800">BizChat AI</div></div>
+        <div style="margin-top:8px;color:rgba(255,255,255,0.8)">AI-powered WhatsApp automation for Pakistani businesses</div>
+      </div>
+      <div style="display:flex;gap:40px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;margin-bottom:8px">Product</div>
+          <div style="color:rgba(255,255,255,0.85)"><a href="#features">Features</a> · <a href="#pricing">Pricing</a> · <a href="/dashboard">Dashboard</a></div>
+        </div>
+        <div>
+          <div style="font-weight:700;margin-bottom:8px">Support</div>
+          <div style="color:rgba(255,255,255,0.85)"><a href="/contact">Contact Us</a> · <a href="#">FAQ</a></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-weight:700;margin-bottom:8px">Contact Us</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <a href="https://wa.me/923002791485" style="display:inline-flex;align-items:center;gap:8px;color:var(--accent)"><svg width="28" height="28" viewBox="0 0 24 24" fill="#25D366" xmlns="http://www.w3.org/2000/svg" style="border-radius:50%"><circle cx="12" cy="12" r="12" fill="#25D366"/><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.472-.148-.672.15-.198.297-.767.966-.94 1.164-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.447-.52.149-.174.198-.298.298-.497.099-.198.05-.372-.025-.521-.075-.149-.672-1.612-.922-2.206-.243-.579-.49-.5-.672-.51l-.573-.01c-.198 0-.52.074-.793.372-.273.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.1 3.2 5.077 4.487 2.977 1.288 2.977.858 3.513.806.536-.05 1.758-.718 2.006-1.412.248-.694.248-1.289.173-1.412-.074-.123-.272-.198-.57-.347z" fill="#fff"/></svg></a>
+          <a href="https://www.linkedin.com/in/ihsantheanalyst" style="color:white" data-lucide="linkedin"></a>
+          <a href="https://github.com/imihsanullah85" style="color:white" data-lucide="github"></a>
+        </div>
+      </div>
+    </div>
+    <div class="bottom">© 2026 BizChat AI. Built for Pakistani businesses. All rights reserved.</div>
+  </footer>
+
+  <script>
+    lucide.createIcons();
+    // Mobile menu
+    const mobileBtn = document.getElementById('mobileBtn');
+    const mobileMenu = document.getElementById('mobileMenu');
+    mobileBtn && mobileBtn.addEventListener('click', () => {
+      if (mobileMenu.style.display === 'none' || mobileMenu.style.display === '') mobileMenu.style.display = 'block'; else mobileMenu.style.display = 'none';
+      if (mobileMenu.innerHTML.trim() === '') mobileMenu.innerHTML = `<a href='#features' style='display:block;padding:8px'>Features</a><a href='#pricing' style='display:block;padding:8px'>Pricing</a><a href='/login' style='display:block;padding:8px'>Login</a><a href='/register' style='display:block;padding:8px'>Start Free Trial</a>`;
+    });
+
+    // FAQ accordion
+    document.querySelectorAll('.q').forEach(q => q.addEventListener('click', () => {
+      const next = q.nextElementSibling; document.querySelectorAll('.a').forEach(a=>{if(a!==next)a.style.display='none'});
+      next.style.display = next.style.display === 'block' ? 'none' : 'block';
+    }));
+
+    // Watch demo modal (simple)
+    const watch = document.getElementById('watchDemo');
+    watch && watch.addEventListener('click', () => { alert('Demo coming soon'); });
+
+    // Navbar hide on scroll down, show on scroll up
+    let lastScroll=0; const nav=document.getElementById('siteNav'); window.addEventListener('scroll',()=>{const s=window.scrollY; if(s>lastScroll && s>80){nav.style.transform='translateY(-100%)'; nav.style.transition='transform 0.26s ease'} else {nav.style.transform='translateY(0)'; nav.style.transition='transform 0.26s ease'} lastScroll=s});
+
   </script>
 </body>
 </html>`;
