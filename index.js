@@ -1427,12 +1427,20 @@ function getRegisterPage() {
             <input type="email" id="email" placeholder="hello@business.com">
             <div class="field-error" id="emailError">Please enter a valid email.</div>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="position:relative;">
             <label for="password">Password</label>
             <input type="password" id="password" placeholder="Create password">
+            <button type="button" id="togglePassword" aria-label="Toggle password" style="position:absolute;right:12px;top:38px;background:transparent;border:none;cursor:pointer;color:var(--muted);">Show</button>
             <div class="field-error" id="passwordError">Please create a password.</div>
           </div>
-          <button type="submit" class="btn"><span class="spinner"></span><span>Create Account</span></button>
+          <div class="form-group" style="position:relative;">
+            <label for="confirm_password">Confirm Password</label>
+            <input type="password" id="confirm_password" placeholder="Confirm password">
+            <button type="button" id="toggleConfirmPassword" aria-label="Toggle confirm password" style="position:absolute;right:12px;top:38px;background:transparent;border:none;cursor:pointer;color:var(--muted);">Show</button>
+            <span id="confirmMatchIcon" style="position:absolute;right:56px;top:42px;display:none;color:var(--accent);font-weight:800;">✓</span>
+            <div class="field-error" id="confirmPasswordError">Passwords do not match</div>
+          </div>
+          <button type="submit" class="btn" id="submitBtn"><span class="spinner"></span><span>Create Account</span></button>
         </form>
         <p class="auth-footer">Already have an account? <a href="/login">Sign in</a></p>
       </div>
@@ -1445,34 +1453,83 @@ function getRegisterPage() {
       const error = document.getElementById(id + 'Error');
       if (field) field.style.borderColor = '#dc2626';
       if (error) { error.textContent = message; error.style.display = 'block'; }
-    }
-    function clearFieldErrors() {
-      ['shop_name', 'email', 'password'].forEach((id) => {
-        const field = document.getElementById(id);
-        const error = document.getElementById(id + 'Error');
-        if (field) field.style.borderColor = '#dbe7e3';
-        if (error) error.style.display = 'none';
-      });
       document.getElementById('error').style.display = 'none';
     }
+    function clearFieldError(id) {
+      const field = document.getElementById(id);
+      const error = document.getElementById(id + 'Error');
+      if (field) field.style.borderColor = '#dbe7e3';
+      if (error) error.style.display = 'none';
+      document.getElementById('error').style.display = 'none';
+    }
+
+    function isValidEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    }
+
+    // Toggle password visibility
+    const pwField = document.getElementById('password');
+    const togglePw = document.getElementById('togglePassword');
+    togglePw.addEventListener('click', () => {
+      if (pwField.type === 'password') { pwField.type = 'text'; togglePw.textContent = 'Hide'; }
+      else { pwField.type = 'password'; togglePw.textContent = 'Show'; }
+    });
+    const confirmField = document.getElementById('confirm_password');
+    const toggleConfirm = document.getElementById('toggleConfirmPassword');
+    const confirmIcon = document.getElementById('confirmMatchIcon');
+    toggleConfirm.addEventListener('click', () => {
+      if (confirmField.type === 'password') { confirmField.type = 'text'; toggleConfirm.textContent = 'Hide'; }
+      else { confirmField.type = 'password'; toggleConfirm.textContent = 'Show'; }
+    });
+
+    // Clear specific field error on input
+    ['shop_name','email','password','confirm_password'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('input', () => {
+        clearFieldError(id);
+        // Additional behavior for confirm field: update match state
+        if (id === 'confirm_password' || id === 'password') {
+          const p = document.getElementById('password').value;
+          const c = document.getElementById('confirm_password').value;
+          if (c && p === c && p.length >= 8) {
+            confirmIcon.style.display = 'inline';
+            document.getElementById('confirmPasswordError').style.display = 'none';
+            document.getElementById('submitBtn').disabled = false;
+          } else {
+            confirmIcon.style.display = 'none';
+            if (c) {
+              document.getElementById('confirmPasswordError').textContent = 'Passwords do not match';
+              document.getElementById('confirmPasswordError').style.display = 'block';
+            } else {
+              document.getElementById('confirmPasswordError').style.display = 'none';
+            }
+            document.getElementById('submitBtn').disabled = true;
+          }
+        }
+      });
+    });
+
+    // Initialize submit button disabled until confirm matches
+    document.getElementById('submitBtn').disabled = true;
+
     document.getElementById('registerForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      clearFieldErrors();
-      const btn = e.target.querySelector('.btn');
+      // Validate in required order, one error at a time
+      clearFieldError('shop_name'); clearFieldError('email'); clearFieldError('password'); clearFieldError('confirm_password');
       const shopName = document.getElementById('shop_name').value.trim();
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
-      let hasError = false;
-      if (!shopName) { showFieldError('shop_name', 'Please enter your business name.'); hasError = true; }
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showFieldError('email', 'Please enter a valid email.'); hasError = true; }
-      if (!password) { showFieldError('password', 'Please create a password.'); hasError = true; }
-      if (hasError) {
-        document.getElementById('registerCard').classList.remove('shake');
-        void document.getElementById('registerCard').offsetWidth;
-        document.getElementById('registerCard').classList.add('shake');
-        return;
-      }
-      btn.classList.add('loading');
+      const confirm = document.getElementById('confirm_password').value;
+      const btn = document.getElementById('submitBtn');
+
+      if (!shopName) { showFieldError('shop_name', 'Please enter your business name.'); document.getElementById('shop_name').focus(); document.getElementById('registerCard').classList.add('shake'); return; }
+      if (!email || !isValidEmail(email)) { showFieldError('email', 'Please enter a valid email.'); document.getElementById('email').focus(); document.getElementById('registerCard').classList.add('shake'); return; }
+      if (!password || password.length < 8) { showFieldError('password', 'Password must be at least 8 characters.'); document.getElementById('password').focus(); document.getElementById('registerCard').classList.add('shake'); return; }
+      if (password !== confirm) { showFieldError('confirm_password', 'Passwords do not match'); document.getElementById('confirm_password').focus(); document.getElementById('registerCard').classList.add('shake'); return; }
+
+      // Passed validation: show loading state and disable button
+      btn.classList.add('loading'); btn.disabled = true; btn.querySelector('span:last-child').textContent = 'Creating account...';
       try {
         const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shop_name: shopName, email, password }) });
         const data = await res.json();
@@ -1480,17 +1537,15 @@ function getRegisterPage() {
         else {
           document.getElementById('error').textContent = data.error || 'Registration failed.';
           document.getElementById('error').style.display = 'block';
-          document.getElementById('registerCard').classList.remove('shake');
-          void document.getElementById('registerCard').offsetWidth;
+          btn.classList.remove('loading'); btn.disabled = false; btn.querySelector('span:last-child').textContent = 'Create Account';
           document.getElementById('registerCard').classList.add('shake');
         }
       } catch (err) {
         document.getElementById('error').textContent = 'Registration failed.';
         document.getElementById('error').style.display = 'block';
-        document.getElementById('registerCard').classList.remove('shake');
-        void document.getElementById('registerCard').offsetWidth;
+        btn.classList.remove('loading'); btn.disabled = false; btn.querySelector('span:last-child').textContent = 'Create Account';
         document.getElementById('registerCard').classList.add('shake');
-      } finally { btn.classList.remove('loading'); }
+      }
     });
   </script>
 </body>
