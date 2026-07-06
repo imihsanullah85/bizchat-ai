@@ -19,13 +19,13 @@ if (isProduction) {
   app.set('trust proxy', 1);
 }
 
-function sanitizeInput(input) {
-  console.log('Sanitizing input:', input?.substring(0, 50));
-  if (!input) return '';
-  return String(input)
-    .trim()
-    .replace(/[<>]/g, '')
-    .substring(0, 5000);
+function sanitizeInput(input, maxLen = 500) {
+  if (input === undefined || input === null) return '';
+  let value = String(input).trim().replace(/\u0000/g, '');
+  value = value.replace(/<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, '');
+  value = value.replace(/[<>"'`]/g, '');
+  value = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
+  return value.substring(0, maxLen);
 }
 
 // Database helpers
@@ -45,17 +45,19 @@ async function getBusinessById(id) {
 }
 
 async function insertBusiness(email, passwordHash, shopName) {
+  const safeShopName = sanitizeInput(shopName || 'My Shop');
   const { rows } = await pool.query(
     'INSERT INTO businesses (email, password_hash, shop_name, monthly_fee) VALUES ($1, $2, $3, $4) RETURNING *',
-    [email, passwordHash, shopName || 'My Shop', 5000]
+    [email, passwordHash, safeShopName, 5000]
   );
   return rows[0];
 }
 
 async function updateBusiness(id, updates) {
   const keys = Object.keys(updates);
+  const sanitizedValues = Object.values(updates).map((value) => typeof value === 'string' ? sanitizeInput(value) : value);
   const setString = keys.map((key, i) => `"${key}" = $${i + 2}`).join(', ');
-  const values = [id, ...Object.values(updates)];
+  const values = [id, ...sanitizedValues];
   const { rows } = await pool.query(`UPDATE businesses SET ${setString} WHERE id = $1 RETURNING *`, values);
   return rows[0];
 }
@@ -76,9 +78,11 @@ async function findDuplicateWhatsAppPhoneIds() {
 }
 
 async function ensureConversation(businessId, customerPhone, customerName) {
+  const safePhone = sanitizeInput(customerPhone);
+  const safeName = sanitizeInput(customerName || '');
   const { rows } = await pool.query(
     'INSERT INTO conversations (business_id, customer_phone, customer_name) VALUES ($1, $2, $3) ON CONFLICT (business_id, customer_phone) DO UPDATE SET customer_name = EXCLUDED.customer_name RETURNING *',
-    [businessId, customerPhone, customerName || '']
+    [businessId, safePhone, safeName]
   );
   return rows[0];
 }
@@ -227,9 +231,11 @@ async function maybeSummarizeConversation(conversationId, businessContext) {
 }
 
 async function insertConversationInsight(businessId, conversationId, customerPhone, insightType, insightData) {
+  const safePhone = sanitizeInput(customerPhone);
+  const safeInsight = sanitizeInput(insightData);
   const { rows } = await pool.query(
     'INSERT INTO conversation_insights (business_id, conversation_id, customer_phone, insight_type, insight_data) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-    [businessId, conversationId, customerPhone, insightType, insightData]
+    [businessId, conversationId, safePhone, insightType, safeInsight]
   );
   return rows[0];
 }
@@ -1850,7 +1856,16 @@ function getDashboardPage() {
       if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
       return Math.floor(diff / 86400) + 'd ago';
     }
-    function escapeHtml(text) { if (!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+    function escapeHtml(text) {
+      if (text === undefined || text === null) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/\u0060/g, '&#96;');
+    }
     async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location = '/login'; }
     loadDashboard();
   </script>
@@ -1939,7 +1954,16 @@ function getConversationsListPage() {
       } catch (err) { console.error(err); }
     }
     function getTimeAgo(dateStr) { if (!dateStr) return ''; const diff = Math.floor((new Date() - new Date(dateStr)) / 1000); if (diff < 60) return 'now'; if (diff < 3600) return Math.floor(diff / 60) + 'm'; if (diff < 86400) return Math.floor(diff / 3600) + 'h'; return Math.floor(diff / 86400) + 'd'; }
-    function escapeHtml(text) { if (!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+    function escapeHtml(text) {
+      if (text === undefined || text === null) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/\u0060/g, '&#96;');
+    }
     async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location = '/login'; }
     loadConversations();
   </script>
@@ -2052,7 +2076,16 @@ function getConversationPage(convId) {
         lucide.createIcons();
       } catch (err) { console.error(err); }
     }
-    function escapeHtml(text) { if (typeof text !== 'string') return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+    function escapeHtml(text) {
+      if (text === undefined || text === null) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/\u0060/g, '&#96;');
+    }
     async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location = '/login'; }
     loadConversation();
   </script>
@@ -2393,7 +2426,16 @@ function getOrdersPage() {
         });
       } catch (err) { console.error(err); }
     }
-    function escapeHtml(text) { if (!text) return ''; const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+    function escapeHtml(text) {
+      if (text === undefined || text === null) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/\u0060/g, '&#96;');
+    }
     async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location = '/login'; }
     loadOrders();
   </script>
