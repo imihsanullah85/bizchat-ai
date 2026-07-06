@@ -83,12 +83,23 @@ async function ensureConversation(businessId, customerPhone, customerName) {
   return rows[0];
 }
 
-async function insertMessage(conversationId, direction, content) {
+async function insertMessage(conversationId, direction, content, businessContext) {
   const { rows } = await pool.query(
     'INSERT INTO messages (conversation_id, direction, content) VALUES ($1, $2, $3) RETURNING *',
     [conversationId, direction, content]
   );
-  return rows[0];
+  const inserted = rows[0];
+  try {
+    await incrementConversationMessageCount(conversationId);
+  } catch (error) {
+    console.error('Conversation count update failed:', error);
+  }
+  try {
+    maybeSummarizeConversation(conversationId, businessContext).catch((err) => console.error('Summary trigger failed:', err));
+  } catch (error) {
+    console.error('Summary trigger failed:', error);
+  }
+  return inserted;
 }
 
 async function getConversationsForBusiness(businessId) {
@@ -118,6 +129,101 @@ async function getLastMessagesForConversation(conversationId, limit = 10) {
     [conversationId, limit]
   );
   return rows.reverse();
+}
+
+async function getConversationById(conversationId) {
+  const { rows } = await pool.query('SELECT * FROM conversations WHERE id = $1', [conversationId]);
+  return rows[0];
+}
+
+async function getLastNMessages(conversationId, limit = 10) {
+  return getLastMessagesForConversation(conversationId, limit);
+}
+
+async function updateConversationSummary(conversationId, summary) {
+  await pool.query('UPDATE conversations SET conversation_summary = $2 WHERE id = $1', [conversationId, summary]);
+}
+
+async function incrementConversationMessageCount(conversationId) {
+  await pool.query('UPDATE conversations SET message_count = COALESCE(message_count, 0) + 1 WHERE id = $1', [conversationId]);
+}
+
+async function callOpenRouter(messages) {
+  if (!process.env.OPENROUTER_API_KEY) {
+    console.error('OpenRouter API key missing');
+    return null;
+  }
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ model: 'openrouter/free', messages })
+    });
+    const data = await response.json();
+    if (data.error) {
+      console.error('OpenRouter error:', data.error);
+      return null;
+    }
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch (error) {
+    console.error('OpenRouter fetch error:', error);
+    return null;
+  }
+}
+
+async function assembleConversationContext(conversationId) {
+  try {
+    const conversation = await getConversationById(conversationId);
+    if (!conversation) return [];
+    const recentMessages = await getLastNMessages(conversationId, 10);
+    const messages = [];
+    if (conversation.conversation_summary) {
+      messages.push({
+        role: 'system',
+        content: 'Previous conversation summary: ' + conversation.conversation_summary
+      });
+    }
+    for (const msg of recentMessages) {
+      messages.push({
+        role: msg.direction === 'out' ? 'assistant' : 'user',
+        content: msg.content
+      });
+    }
+    return messages;
+  } catch (error) {
+    console.error('Assemble conversation context failed:', error);
+    return [];
+  }
+}
+
+async function summarizeConversation(conversationId, businessContext) {
+  try {
+    const messages = await getLastNMessages(conversationId, 20);
+    const summaryPrompt = `Summarize this WhatsApp customer service conversation in 3 sentences maximum. Focus on: what the customer wants, what was discussed, and any pending actions. Be concise.${businessContext ? `\n\nBusiness context: ${businessContext}` : ''}\n\nConversation:\n${messages.map((m) => (m.direction === 'in' ? 'Customer: ' : 'Bot: ') + m.content).join('\n')}`;
+    const response = await callOpenRouter([{ role: 'user', content: summaryPrompt }]);
+    if (!response) {
+      throw new Error('Empty summary from OpenRouter');
+    }
+    await updateConversationSummary(conversationId, response);
+    console.log('Conversation summarized:', conversationId);
+  } catch (error) {
+    console.error('Summary failed:', error);
+  }
+}
+
+async function maybeSummarizeConversation(conversationId, businessContext) {
+  try {
+    const { rows } = await pool.query('SELECT message_count FROM conversations WHERE id = $1', [conversationId]);
+    const count = rows[0]?.message_count || 0;
+    if (count > 0 && count % 10 === 0) {
+      summarizeConversation(conversationId, businessContext).catch((err) => console.error('Summary failed:', err));
+    }
+  } catch (error) {
+    console.error('Summary trigger failed:', error);
+  }
 }
 
 async function insertConversationInsight(businessId, conversationId, customerPhone, insightType, insightData) {
@@ -628,13 +734,8 @@ async function handleWhatsAppMessage(msg, value) {
   }
 
   try {
-    const recentMessages = await getLastMessagesForConversation(conversation.id, 10);
-    const conversationHistory = recentMessages.map((entry) => {
-      const role = entry.direction === 'out' ? 'assistant' : 'user';
-      return { role, content: entry.content };
-    });
-
-    const aiResponse = await generateAIResponse(business, conversationHistory);
+    const conversationContext = await assembleConversationContext(conversation.id);
+    const aiResponse = await generateAIResponse(business, conversationContext, messageContent);
     await insertMessage(conversation.id, 'out', aiResponse);
     await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, aiResponse);
   } catch (error) {
@@ -642,7 +743,7 @@ async function handleWhatsAppMessage(msg, value) {
   }
 }
 
-async function generateAIResponse(business, conversationHistory) {
+async function generateAIResponse(business, conversationContext, currentCustomerMessage) {
   const businessRecord = await getBusinessById(business.id) || business;
   const businessName = businessRecord.shop_name || 'this business';
   const businessCategory = '';
@@ -691,16 +792,14 @@ ${businessInfoLines.join('\n')}`;
   try {
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...conversationHistory
+      ...conversationContext,
+      { role: 'user', content: currentCustomerMessage }
     ];
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'openrouter/free', messages })
-    });
-    const data = await response.json();
-    if (data.error) { console.error('OpenRouter error:', data.error); return 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.'; }
-    return data.choices?.[0]?.message?.content || 'Sorry, I am having trouble responding right now.';
+    const responseText = await callOpenRouter(messages);
+    if (!responseText) {
+      return 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.';
+    }
+    return responseText;
   } catch (error) {
     console.error('OpenRouter fetch error:', error);
     return 'Sorry, I am having trouble responding right now.';

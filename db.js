@@ -53,6 +53,8 @@ async function createTables() {
         business_id INTEGER REFERENCES businesses(id) ON DELETE CASCADE,
         customer_phone VARCHAR(255) NOT NULL,
         customer_name VARCHAR(255),
+        conversation_summary TEXT,
+        message_count INTEGER DEFAULT 0,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         order_flow_state VARCHAR(50),
         order_flow_data JSONB,
@@ -60,6 +62,12 @@ async function createTables() {
       );
     `);
 
+    await client.query(`
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS conversation_summary TEXT;
+    `);
+    await client.query(`
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS message_count INTEGER DEFAULT 0;
+    `);
     await client.query(`
       ALTER TABLE conversations ADD COLUMN IF NOT EXISTS order_flow_state VARCHAR(50);
     `);
