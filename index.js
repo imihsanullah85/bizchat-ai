@@ -19,6 +19,7 @@ if (isProduction) {
 }
 
 function sanitizeInput(input) {
+  console.log('Sanitizing input:', input?.substring(0, 50));
   if (!input) return '';
   return String(input)
     .trim()
@@ -167,7 +168,11 @@ const webhookLimiter = rateLimit({
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: 'Too many login attempts, try again in 15 minutes.'
+  message: 'Too many login attempts, try again in 15 minutes.',
+  handler: function (req, res /*, next */) {
+    try { console.log('Rate limiter hit:', req.ip, req.path); } catch (e) { }
+    res.status(429).json({ error: 'Too many login attempts, try again in 15 minutes.' });
+  }
 });
 
 app.use('/webhook', webhookLimiter);
