@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const rateLimit = require('express-rate-limit');
-const validator = require('validator');
 const { pool, createTables } = require('./db');
 const path = require('path');
 
@@ -894,7 +893,8 @@ app.post('/api/auth/register', async (req, res) => {
   const sanitizedEmail = sanitizeInput(email);
   const sanitizedShopName = sanitizeInput(shop_name);
   if (!sanitizedEmail || !password) return res.status(400).json({ error: 'Email and password required' });
-  if (!validator.isEmail(sanitizedEmail)) return res.status(400).json({ error: 'Invalid email' });
+  const isValid = sanitizedEmail && sanitizedEmail.includes('@') && sanitizedEmail.includes('.') && sanitizedEmail.length > 5;
+  if (!isValid) return res.status(400).json({ error: 'Invalid email' });
   try {
     const existing = await getBusinessByEmail(sanitizedEmail);
     if (existing) return res.status(400).json({ error: 'Email already registered' });
@@ -909,7 +909,8 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   const sanitizedEmail = sanitizeInput(email);
   if (!sanitizedEmail || !password) return res.status(400).json({ error: 'Email and password required' });
-  if (!validator.isEmail(sanitizedEmail)) return res.status(400).json({ error: 'Invalid email' });
+  const isValid = sanitizedEmail && sanitizedEmail.includes('@') && sanitizedEmail.includes('.') && sanitizedEmail.length > 5;
+  if (!isValid) return res.status(400).json({ error: 'Invalid email' });
   try {
     const business = await getBusinessByEmail(sanitizedEmail);
     if (!business) return res.status(401).json({ error: 'Invalid credentials' });
@@ -1392,7 +1393,7 @@ function getLoginPage() {
         <form id="loginForm">
           <div class="form-group">
             <label for="email">Email</label>
-            <input type="email" id="email" placeholder="hello@business.com">
+            <input type="text" id="email" placeholder="hello@business.com">
             <div class="field-error" id="emailError">Please enter a valid email.</div>
           </div>
           <div class="form-group">
@@ -1430,7 +1431,7 @@ function getLoginPage() {
       const email = document.getElementById('email').value.trim();
       const password = document.getElementById('password').value;
       let hasError = false;
-      const emailValid = email.includes('@') && email.includes('.');
+      const emailValid = isValidEmail(email);
       if (!email || !emailValid) { showFieldError('email', 'Please enter a valid email.'); hasError = true; }
       if (!password) { showFieldError('password', 'Please enter your password.'); hasError = true; }
       if (hasError) {
@@ -1535,7 +1536,7 @@ function getRegisterPage() {
           </div>
           <div class="form-group">
             <label for="email">Email</label>
-            <input type="email" id="email" placeholder="hello@business.com">
+            <input type="text" id="email" placeholder="hello@business.com">
             <div class="field-error" id="emailError">Please enter a valid email.</div>
           </div>
           <div class="form-group" style="position:relative;">
@@ -1575,7 +1576,9 @@ function getRegisterPage() {
     }
 
     function isValidEmail(email) {
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      return email.includes('@') &&
+             email.includes('.') &&
+             email.length > 5;
     }
 
     // Toggle password visibility
