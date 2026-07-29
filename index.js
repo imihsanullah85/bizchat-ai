@@ -163,14 +163,19 @@ async function callOpenRouter(messages) {
         Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ model: 'openrouter/free', messages })
+      body: JSON.stringify({ model: 'openrouter/free', max_tokens: 300, messages })
     });
     const data = await response.json();
     if (data.error) {
       console.error('OpenRouter error:', data.error);
       return null;
     }
-    return data.choices?.[0]?.message?.content?.trim() || null;
+    const responseText = data.choices?.[0]?.message?.content?.trim() || null;
+    if (!isValidResponse(responseText)) {
+      console.error('Bad AI response detected:', responseText);
+      return null;
+    }
+    return responseText;
   } catch (error) {
     console.error('OpenRouter fetch error:', error);
     return null;
@@ -562,6 +567,14 @@ async function handleOrderFlowMessage(msg, value, conversation, business) {
   const messageContent = messageText || (isMediaMessage(msg) ? '[media]' : '');
   const currentData = conversation.order_flow_data || {};
 
+  if (isExitIntent(messageText)) {
+    await updateConversationOrderFlow(conversation.id, null, null);
+    const exitReply = 'No problem at all! If you need anything else, feel free to ask. 😊';
+    await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, exitReply);
+    await insertMessage(conversation.id, 'out', exitReply);
+    return true;
+  }
+
   if (conversation.order_flow_state === 'collecting_item') {
     const itemText = sanitizeInput(messageText);
     if (!itemText) {
@@ -642,10 +655,37 @@ async function handleOrderFlowMessage(msg, value, conversation, business) {
   return false;
 }
 
+const exitKeywords = [
+  'cancel', 'return', 'refund', 'stop', 'exit',
+  'quit', 'no', 'nahi', 'band karo', 'rehne do',
+  'not interested', 'forget it', 'shut up',
+  'nevermind', 'leave it', 'choro'
+];
+
+const orderKeywords = [
+  'order', 'buy', 'purchase', 'book', 'want to get',
+  'i want', 'i need', 'chahiye', 'lena hai',
+  'khareedna', 'reserve', 'confirm'
+];
+
+function isExitIntent(messageText) {
+  const text = String(messageText || '').toLowerCase();
+  return exitKeywords.some((keyword) => text.includes(keyword));
+}
+
 function isBuyingIntent(messageText) {
   const text = String(messageText || '').toLowerCase();
-  const keywords = ['buy', 'purchase', 'order', 'book', 'appointment', 'i want', 'i need', 'interested', 'reserve', 'price', 'payment', 'confirm'];
-  return keywords.some((keyword) => text.includes(keyword));
+  return orderKeywords.some((keyword) => text.includes(keyword));
+}
+
+function isValidResponse(text) {
+  if (!text) return false;
+  if (text.length > 500) return false;
+  const suspiciousPattern = /[a-z]{2,}[^\s]{5,}[a-z]{2,}/i;
+  if (suspiciousPattern.test(text)) return false;
+  if (text.includes('https://=') ||
+      text.includes('http://=')) return false;
+  return true;
 }
 
 async function handleWhatsAppMessage(msg, value) {
@@ -697,6 +737,20 @@ async function handleWhatsAppMessage(msg, value) {
       if (handled) return;
     } catch (error) {
       console.error('Order flow handling error (non-fatal):', error.message, 'Customer:', customerPhone);
+    }
+  }
+
+  if (!conversation.order_flow_state && isExitIntent(messageText)) {
+    try {
+      const complaintReply = "I'm sorry to hear that. I've noted your concern and our team will follow up with you shortly. 😊";
+      await insertConversationInsight(business.id, conversation.id, customerPhone, 'complaint', messageText);
+      await notifyOwner(business.owner_whatsapp, 'attention', customerPhone, messageText);
+      await sendWhatsAppMessage(business.whatsapp_number, businessPhoneId, customerPhone, complaintReply);
+      await insertMessage(conversation.id, 'out', complaintReply);
+      return;
+    } catch (error) {
+      console.error('Complaint handling error (non-fatal):', error.message, 'Customer:', customerPhone);
+      return;
     }
   }
 
@@ -802,7 +856,8 @@ ${businessInfoLines.join('\n')}`;
     ];
     const responseText = await callOpenRouter(messages);
     if (!responseText) {
-      return 'Sorry, I am having trouble responding right now. Please try again or contact the shop directly.';
+      console.error('Bad AI response detected:', responseText);
+      return "I'm sorry, I didn't understand that. Could you please rephrase your question? 😊";
     }
     return responseText;
   } catch (error) {
