@@ -679,12 +679,10 @@ function isBuyingIntent(messageText) {
 }
 
 function isValidResponse(text) {
-  if (!text) return false;
-  if (text.length > 500) return false;
-  const suspiciousPattern = /[a-z]{2,}[^\s]{5,}[a-z]{2,}/i;
-  if (suspiciousPattern.test(text)) return false;
-  if (text.includes('https://=') ||
-      text.includes('http://=')) return false;
+  if (!text || text.trim().length === 0) return false;
+  if (text.includes('https://=')) return false;
+  if (text.includes('http://=')) return false;
+  if (text.length > 1000) return false;
   return true;
 }
 
