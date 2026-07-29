@@ -48,6 +48,18 @@ async function createTables() {
     `);
 
     await client.query(`
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS plan VARCHAR(20) DEFAULT 'starter';
+    `);
+
+    await client.query(`
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP WITH TIME ZONE;
+    `);
+
+    await client.query(`
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS trial_ended BOOLEAN DEFAULT false;
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS conversations (
         id SERIAL PRIMARY KEY,
         business_id INTEGER REFERENCES businesses(id) ON DELETE CASCADE,
