@@ -23,7 +23,8 @@ function sanitizeInput(input, maxLen = 500) {
   let value = String(input).trim().replace(/\u0000/g, '');
   value = value.replace(/<\s*script[^>]*>[\s\S]*?<\s*\/\s*script\s*>/gi, '');
   value = value.replace(/[<>"'`]/g, '');
-  value = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '');
+  // Preserve newline characters so multi-line service lists and FAQs keep line breaks.
+  value = value.replace(/[\u0000-\u0009\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, '');
   return value.substring(0, maxLen);
 }
 
@@ -805,19 +806,35 @@ async function handleWhatsAppMessage(msg, value) {
 async function generateAIResponse(business, conversationContext, currentCustomerMessage) {
   const businessRecord = await getBusinessById(business.id) || business;
   const businessName = businessRecord.shop_name || 'this business';
-  const businessCategory = '';
+  const businessCategory = businessRecord.category || 'general';
   const businessDescription = businessRecord.description || '';
-  const servicesAndPrices = [businessRecord.services, businessRecord.prices].filter(Boolean).join('\n');
   const workingHours = businessRecord.timings || '';
   const location = '';
   const faqs = businessRecord.faqs || '';
   const paymentInfo = businessRecord.payment_link || '';
+  const structuredData = businessRecord.structured_data || {};
+
+  let servicesAndPrices = [businessRecord.services, businessRecord.prices].filter(Boolean).join('\n');
+  let phoneShopInfo = '';
+  if (businessCategory === 'phone_shop') {
+    const products = Array.isArray(structuredData.products) ? structuredData.products : [];
+    const productList = products.map(p => `${p.model || ''} ${p.storage || ''}: PKR ${p.price || ''} (${p.condition || 'Unknown'}, ${p.inStock ? 'In Stock' : 'Out of Stock'})`).filter(Boolean).join('\n');
+    const warrantyPolicy = structuredData.warrantyPolicy || '';
+    const exchangePolicy = structuredData.exchangePolicy || '';
+    const deliveryAreas = structuredData.deliveryAreas || '';
+    if (productList) phoneShopInfo += `Available Products:\n${productList}\n\n`;
+    if (warrantyPolicy) phoneShopInfo += `Warranty: ${warrantyPolicy}\n`;
+    if (exchangePolicy) phoneShopInfo += `Exchange Policy: ${exchangePolicy}\n`;
+    if (deliveryAreas) phoneShopInfo += `Delivery Areas: ${deliveryAreas}`;
+    if (!phoneShopInfo && servicesAndPrices) phoneShopInfo = `Services and Prices:\n${servicesAndPrices}`;
+  }
 
   const businessInfoLines = [];
   businessInfoLines.push(`Name: ${businessName}`);
   if (businessCategory) businessInfoLines.push(`Category: ${businessCategory}`);
   if (businessDescription) businessInfoLines.push(`Description: ${businessDescription}`);
-  if (servicesAndPrices) businessInfoLines.push(`Services and Prices: ${servicesAndPrices}`);
+  if (businessCategory === 'phone_shop' && phoneShopInfo) businessInfoLines.push(phoneShopInfo);
+  else if (servicesAndPrices) businessInfoLines.push(`Services and Prices: ${servicesAndPrices}`);
   if (workingHours) businessInfoLines.push(`Working Hours: ${workingHours}`);
   if (location) businessInfoLines.push(`Location: ${location}`);
   if (faqs) businessInfoLines.push(`Frequently Asked Questions: ${faqs}`);
@@ -994,8 +1011,8 @@ app.get('/api/validate/tenant-data', requireAuth, async (req, res) => {
 
 app.put('/api/business', requireAuth, async (req, res) => {
   const updates = {};
-  ['shop_name', 'description', 'services', 'prices', 'timings', 'faqs', 'whatsapp_number', 'whatsapp_phone_id', 'owner_whatsapp', 'payment_link', 'category', 'services_list', 'business_hours'].forEach((key) => {
-    if (Object.prototype.hasOwnProperty.call(req.body, key)) updates[key] = sanitizeInput(req.body[key]);
+  ['shop_name', 'description', 'services', 'prices', 'timings', 'faqs', 'whatsapp_number', 'whatsapp_phone_id', 'owner_whatsapp', 'payment_link', 'category', 'structured_data', 'services_list', 'business_hours'].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(req.body, key)) updates[key] = typeof req.body[key] === 'string' ? sanitizeInput(req.body[key]) : req.body[key];
   });
   if (!Object.keys(updates).length) return res.status(400).json({ success: false, error: 'No update fields provided' });
   try {
@@ -2146,41 +2163,43 @@ function getSettingsPage() {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>${sharedStyles}
-    .settings-grid { display: grid; gap: 20px; max-width: 900px; }
-    .settings-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: all 0.3s ease; }
-    .settings-card:hover { border-color: rgba(37,211,102,0.15); }
-    .card-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
-    .card-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: rgba(37,211,102,0.08); color: var(--primary); }
-    .card-icon svg { width: 18px; height: 18px; }
-    .card-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
-    .card-body { padding: 24px; }
+    .settings-grid { display: grid; gap: 20px; }
+    .settings-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; transition: all 0.2s; box-shadow: 0 2px 16px rgba(0,0,0,0.04); }
+    .card-header { padding: 24px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; }
+    .card-icon { width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(37,211,102,0.14); color: var(--success); }
+    .card-icon svg { width: 20px; height: 20px; }
+    .card-title { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+    .card-body { padding: 24px 28px; }
     .form-group { margin-bottom: 18px; }
-    .form-group:last-child { margin-bottom: 0; }
-    .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .form-label { display: block; font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px; }
     .form-hint { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
-    textarea.input { min-height: 84px; resize: vertical; }
-    .service-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
-    .service-row input { flex: 1; }
-    .delete-row-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 8px; border-radius: 10px; transition: all 0.2s; }
-    .delete-row-btn:hover { background: rgba(239,83,80,0.1); color: var(--danger); }
-    .add-row-btn { background: none; border: 1px dashed var(--border); color: var(--primary); padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 8px; transition: all 0.2s; }
-    .add-row-btn:hover { background: rgba(37,211,102,0.04); border-color: var(--primary); }
-    .hours-grid { display: grid; gap: 12px; }
-    .hours-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #F7F8FA; border-radius: 10px; border: 1px solid var(--border-light); }
-    .hours-day { width: 80px; font-weight: 600; font-size: 13px; color: var(--text-primary); }
-    .hours-toggle { width: 44px; height: 24px; border-radius: 12px; background: var(--bg-main); border: 1px solid var(--border); position: relative; cursor: pointer; transition: all 0.2s; }
-    .hours-toggle.active { background: var(--primary); border-color: var(--primary); }
-    .hours-toggle::after { content: ''; position: absolute; width: 18px; height: 18px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: all 0.2s; }
-    .hours-toggle.active::after { left: 22px; }
-    .hours-inputs { display: flex; align-items: center; gap: 8px; flex: 1; }
-    .hours-inputs input { width: 100px; }
-    .hours-inputs span { color: var(--text-muted); font-size: 13px; }
-    .status-indicator { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
-    .status-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
-    .status-dot.disconnected { background: var(--danger); }
-    .save-card-btn { margin-top: 16px; }
-    @media (max-width: 768px) { .hours-inputs { flex-direction: column; align-items: flex-start; } }
+    .input, .select, textarea.input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; font-size: 14px; font-family: inherit; color: var(--text-primary); background: var(--bg-card); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    .input:focus, .select:focus, textarea.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,211,102,0.12); }
+    .service-row { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: center; margin-bottom: 12px; }
+    .service-row.service-row-two { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
+    .delete-row-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 8px; border-radius: 12px; transition: all 0.2s; }
+    .delete-row-btn:hover { background: rgba(239,68,68,0.08); color: var(--danger); }
+    .add-row-btn { background: none; border: 1px dashed var(--border); color: var(--primary); padding: 10px 16px; border-radius: 14px; font-size: 13px; cursor: pointer; width: 100%; margin-top: 8px; transition: all 0.2s; }
+    .add-row-btn:hover { background: rgba(37,211,102,0.08); border-color: var(--success); }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+    .tab { padding: 10px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-secondary); cursor: pointer; font-size: 13px; }
+    .tab.active { border-color: var(--success); background: var(--success); color: white; }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; margin-bottom: 18px; }
+    .toggle-label { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .toggle-switch { position: relative; width: 50px; height: 28px; border-radius: 999px; background: var(--border); cursor: pointer; transition: all 0.2s ease; }
+    .toggle-switch.active { background: var(--success); }
+    .toggle-switch::after { content: ''; position: absolute; width: 22px; height: 22px; border-radius: 50%; background: white; top: 3px; left: 3px; transition: all 0.2s ease; }
+    .toggle-switch.active::after { left: 25px; }
+    .inline-inputs { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .save-card-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; margin-top: 16px; }
+    .save-card-btn .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.5); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
+    .save-card-btn.loading .spinner { display: inline-block; }
+    .save-card-btn .checkmark { display: none; width: 16px; height: 16px; border-radius: 50%; background: white; color: var(--success); font-size: 12px; align-items: center; justify-content: center; display: inline-flex; }
+    .save-card-btn.success .checkmark { display: inline-flex; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 1024px) { .settings-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { .service-row, .service-row.service-row-two { grid-template-columns: 1fr; } .inline-inputs { grid-template-columns: 1fr; } }
+
   </style>
 </head>
 <body>
@@ -2197,70 +2216,40 @@ function getSettingsPage() {
     </div>
     <div class="container">
       <div class="settings-grid">
-        <!-- Business Identity -->
         <div class="settings-card" id="business">
           <div class="card-header"><div class="card-icon"><i data-lucide="store"></i></div><h2 class="card-title">Business Identity</h2></div>
           <div class="card-body">
             <div class="form-group"><label class="form-label">Shop Name *</label><input type="text" class="input" id="shop_name" placeholder="e.g., Ahmed Electronics"></div>
             <div class="form-group"><label class="form-label">Description</label><textarea class="input" id="description" placeholder="What do you do? Who do you serve?"></textarea><p class="form-hint">The AI uses this to understand your business</p></div>
-            <div class="form-group"><label class="form-label">Category</label><select class="select" id="category"><option value="">Select category</option><option value="restaurant">Restaurant</option><option value="shop">Shop</option><option value="clinic">Clinic</option><option value="salon">Salon</option><option value="other">Other</option></select></div>
-            <button class="btn btn-primary save-card-btn" onclick="saveSection('identity')"><span>Save</span></button>
+            <div class="form-group"><label class="form-label">Category</label><select class="select" id="category" onchange="handleCategoryChange()"><option value="general">General Shop</option><option value="phone_shop">Phone Shop</option><option value="restaurant">Restaurant</option><option value="clinic">Clinic</option><option value="salon">Salon</option></select></div>
+            <button class="btn btn-primary save-card-btn" onclick="saveSection('identity', this)"><span class="label">Save</span><span class="spinner"></span><span class="checkmark">✓</span></button>
           </div>
         </div>
-        <!-- Services & Pricing -->
-        <div class="settings-card" id="services">
-          <div class="card-header"><div class="card-icon"><i data-lucide="list"></i></div><h2 class="card-title">Services & Pricing</h2></div>
-          <div class="card-body">
-            <div id="servicesList">
-              <div class="service-row"><input type="text" class="input" placeholder="Service name" name="serviceName[]"><input type="text" class="input" placeholder="Price" name="servicePrice[]"><button type="button" class="delete-row-btn" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
-            </div>
-            <button type="button" class="add-row-btn" onclick="addServiceRow()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add Service</button>
-            <button class="btn btn-primary save-card-btn" onclick="saveSection('services')"><span>Save</span></button>
-          </div>
+        <div class="settings-card" id="categorySectionCard">
+          <div class="card-header"><div class="card-icon"><i data-lucide="layers"></i></div><h2 class="card-title" id="categoryCardTitle">Category Settings</h2></div>
+          <div class="card-body" id="categorySection"></div>
         </div>
-        <!-- Business Hours -->
-        <div class="settings-card" id="hours">
-          <div class="card-header"><div class="card-icon"><i data-lucide="clock"></i></div><h2 class="card-title">Business Hours</h2></div>
-          <div class="card-body">
-            <div class="hours-grid" id="hoursGrid"></div>
-            <button class="btn btn-primary save-card-btn" onclick="saveSection('hours')"><span>Save</span></button>
-          </div>
-        </div>
-        <!-- FAQs -->
-        <div class="settings-card" id="faqs">
-          <div class="card-header"><div class="card-icon"><i data-lucide="help-circle"></i></div><h2 class="card-title">FAQs</h2></div>
-          <div class="card-body">
-            <div id="faqsList">
-              <div class="service-row"><input type="text" class="input" placeholder="Question" name="faqQuestion[]"><input type="text" class="input" placeholder="Answer" name="faqAnswer[]"><button type="button" class="delete-row-btn" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:16px;height:16px"></i></button></div>
-            </div>
-            <button type="button" class="add-row-btn" onclick="addFaqRow()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add FAQ</button>
-            <button class="btn btn-primary save-card-btn" onclick="saveSection('faqs')"><span>Save</span></button>
-          </div>
-        </div>
-        <!-- WhatsApp Connection -->
         <div class="settings-card" id="whatsapp">
           <div class="card-header"><div class="card-icon"><i data-lucide="smartphone"></i></div><h2 class="card-title">WhatsApp Connection</h2></div>
           <div class="card-body">
             <div class="form-group"><label class="form-label">Phone Number</label><input type="text" class="input" id="whatsapp_number" placeholder="e.g., +923001234567"><p class="form-hint">Full number with country code</p></div>
             <div class="form-group"><label class="form-label">Phone Number ID</label><input type="text" class="input" id="whatsapp_phone_id" placeholder="From Meta Developers Console"><p class="form-hint">Find in Meta Developers Console</p></div>
             <div class="form-group"><label class="form-label">Connection Status</label><div class="status-indicator"><span class="status-dot disconnected" id="whatsappStatusDot"></span><span id="whatsappStatusText">Not connected</span></div></div>
-            <button class="btn btn-primary save-card-btn" onclick="saveSection('whatsapp')"><span>Save</span></button>
+            <button class="btn btn-primary save-card-btn" onclick="saveSection('whatsapp', this)"><span class="label">Save</span><span class="spinner"></span><span class="checkmark">✓</span></button>
           </div>
         </div>
-        <!-- Owner Notifications -->
         <div class="settings-card" id="notifications">
           <div class="card-header"><div class="card-icon"><i data-lucide="bell"></i></div><h2 class="card-title">Owner Notifications</h2></div>
           <div class="card-body">
             <div class="form-group"><label class="form-label">Your Personal WhatsApp Number</label><input type="text" class="input" id="owner_whatsapp" placeholder="e.g., +923001234567"><p class="form-hint">You will receive instant alerts on this number when customers place orders or need attention.</p></div>
-            <button class="btn btn-primary save-card-btn" onclick="saveSection('notifications')"><span>Save</span></button>
+            <button class="btn btn-primary save-card-btn" onclick="saveSection('notifications', this)"><span class="label">Save</span><span class="spinner"></span><span class="checkmark">✓</span></button>
           </div>
         </div>
-        <!-- Payment Settings -->
         <div class="settings-card" id="payment">
           <div class="card-header"><div class="card-icon"><i data-lucide="credit-card"></i></div><h2 class="card-title">Payment Settings</h2></div>
           <div class="card-body">
             <div class="form-group"><label class="form-label">Payment Link URL</label><input type="url" class="input" id="payment_link" placeholder="https://your-payment-link.com"><p class="form-hint">JazzCash, EasyPaisa, or bank payment link</p></div>
-            <button class="btn btn-primary save-card-btn" onclick="saveSection('payment')"><span>Save</span></button>
+            <button class="btn btn-primary save-card-btn" onclick="saveSection('payment', this)"><span class="label">Save</span><span class="spinner"></span><span class="checkmark">✓</span></button>
           </div>
         </div>
       </div>
@@ -2269,49 +2258,330 @@ function getSettingsPage() {
   <div id="toast" class="toast"></div>
   <script>
     lucide.createIcons();
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    function initHoursGrid() {
-      const grid = document.getElementById('hoursGrid');
-      grid.innerHTML = days.map(day => '<div class="hours-row"><div class="hours-day">' + day + '</div><div class="hours-toggle active" onclick="this.classList.toggle(\\'active\\')"></div><div class="hours-inputs"><input type="time" class="input" value="09:00"><span>to</span><input type="time" class="input" value="18:00"></div></div>').join('');
+    let currentCategory = 'general';
+    let restaurantMenuTab = 'Starters';
+    const restaurantTabs = ['Starters', 'Main Course', 'Drinks', 'Desserts'];
+
+    function renderCategorySection() {
+      currentCategory = document.getElementById('category').value || 'general';
+      document.getElementById('categoryCardTitle').textContent = currentCategory === 'phone_shop' ? 'Products & Pricing' : currentCategory === 'restaurant' ? 'Menu' : currentCategory === 'clinic' ? 'Doctors & Services' : currentCategory === 'salon' ? 'Services' : 'Products & Services';
+      const section = document.getElementById('categorySection');
+      let html = '';
+      if (currentCategory === 'phone_shop') {
+        html = \`
+          <div class="form-group"><label class="form-label">Products</label><div id="phoneProductsList"></div><button type="button" class="add-row-btn" onclick="addPhoneProductRow()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add Product</button></div>
+          <div class="form-group"><label class="form-label">Warranty Policy</label><textarea class="input" id="phone_warrantyPolicy" placeholder="e.g. 6 months shop warranty"></textarea></div>
+          <div class="form-group"><label class="form-label">Exchange Policy</label><textarea class="input" id="phone_exchangePolicy" placeholder="Do you accept exchanges?"></textarea></div>
+          <div class="form-group"><label class="form-label">Delivery Areas</label><input type="text" class="input" id="phone_deliveryAreas" placeholder="e.g. Islamabad, Rawalpindi"></div>
+        \`;
+      } else if (currentCategory === 'restaurant') {
+        const tabs = restaurantTabs.map(tab => \`<button type="button" class="tab \${restaurantMenuTab === tab ? 'active' : ''}" onclick="switchRestaurantTab('\${tab}')">\${tab}</button>\`).join('');
+        html = \`
+          <div class="form-group"><label class="form-label">Menu Categories</label><div class="tabs">\${tabs}</div></div>
+          <div id="restaurantTabContent"></div>
+          <div class="inline-inputs"><div class="form-group"><label class="form-label">Minimum Order Amount</label><input type="number" class="input" id="restaurant_minOrder" placeholder="PKR"></div><div class="form-group"><label class="form-label">Delivery Charge</label><input type="number" class="input" id="restaurant_deliveryCharge" placeholder="PKR"></div></div>
+          <div class="toggle-row"><span class="toggle-label">Delivery Available</span><div id="restaurant_deliveryAvailable" class="toggle-switch" onclick="toggleSwitch(this)"></div></div>
+          <div class="toggle-row"><span class="toggle-label">Table Booking Available</span><div id="restaurant_tableBooking" class="toggle-switch" onclick="toggleSwitch(this)"></div></div>
+        \`;
+      } else if (currentCategory === 'clinic') {
+        html = \`
+          <div class="form-group"><label class="form-label">Doctors</label><div id="clinicDoctorsList"></div><button type="button" class="add-row-btn" onclick="addClinicDoctorRow()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add Doctor</button></div>
+          <div class="form-group"><label class="form-label">Emergency Contact</label><input type="text" class="input" id="clinic_emergencyContact" placeholder="Phone number"></div>
+          <div class="toggle-row"><span class="toggle-label">Insurance Accepted</span><div id="clinic_insuranceAccepted" class="toggle-switch" onclick="toggleSwitch(this)"></div></div>
+          <div class="form-group"><label class="form-label">Appointment Advance Notice</label><input type="text" class="input" id="clinic_advanceNotice" placeholder="e.g. 24 hours"></div>
+        \`;
+      } else if (currentCategory === 'salon') {
+        html = \`
+          <div class="form-group"><label class="form-label">Services</label><div id="salonServicesList"></div><button type="button" class="add-row-btn" onclick="addSalonServiceRow()"><i data-lucide="plus" style="width:14px;height:14px"></i> Add Service</button></div>
+          <div class="form-group"><label class="form-label">Stylists</label><input type="text" class="input" id="salon_stylists" placeholder="e.g. Sara, Ahmed, Fatima"></div>
+          <div class="form-group"><label class="form-label">Walk-in Policy</label><select class="select" id="salon_walkInPolicy"><option value="Walk-ins Welcome">Walk-ins Welcome</option><option value="Appointment Only">Appointment Only</option><option value="Both">Both</option></select></div>
+          <div class="form-group"><label class="form-label">Advance Booking Required</label><input type="number" class="input" id="salon_advanceBookingHours" placeholder="Hours"></div>
+        \`;
+      } else {
+        html = \`
+          <div class="form-group"><label class="form-label">Product List</label><textarea class="input" id="general_productList" placeholder="List your products or services, one per line"></textarea></div>
+          <div class="inline-inputs"><div class="form-group"><label class="form-label">Price Range Min</label><input type="number" class="input" id="general_priceMin" placeholder="PKR"></div><div class="form-group"><label class="form-label">Price Range Max</label><input type="number" class="input" id="general_priceMax" placeholder="PKR"></div></div>
+          <div class="toggle-row"><span class="toggle-label">Wholesale Available</span><div id="general_wholesaleAvailable" class="toggle-switch" onclick="toggleSwitch(this)"></div></div>
+          <div class="form-group"><label class="form-label">Delivery Policy</label><textarea class="input" id="general_deliveryPolicy" placeholder="Delivery policy details"></textarea></div>
+        \`;
+      }
+      section.innerHTML = html;
+      lucide.createIcons();
+      if (currentCategory === 'restaurant') renderRestaurantTabContent();
+      populateCategoryFields(window.loadedStructuredData || {});
     }
-    function addServiceRow() {
-      const list = document.getElementById('servicesList');
+
+    function toggleSwitch(element) {
+      element.classList.toggle('active');
+    }
+
+    function switchRestaurantTab(tab) {
+      restaurantMenuTab = tab;
+      renderCategorySection();
+    }
+
+    function renderRestaurantTabContent() {
+      const content = document.getElementById('restaurantTabContent');
+      if (!content) return;
+      content.innerHTML = \`
+        <div id="restaurant\${restaurantMenuTab}Items"></div>
+        <button type="button" class="add-row-btn" onclick="addRestaurantMenuRow('\${restaurantMenuTab}')"><i data-lucide="plus" style="width:14px;height:14px"></i> Add \${restaurantMenuTab} Item</button>
+      \`;
+      const rows = getRestaurantMenuRows(restaurantMenuTab);
+      if (!rows.length) addRestaurantMenuRow(restaurantMenuTab);
+      rows.forEach(item => addRestaurantMenuRow(restaurantMenuTab, item));
+    }
+
+    function getRestaurantMenuRows(category) {
+      const data = window.loadedStructuredData || {};
+      const menu = data.menu || {};
+      return Array.isArray(menu[category]) ? menu[category] : [];
+    }
+
+    function addRestaurantMenuRow(category, item = {}) {
+      const list = document.getElementById(\`restaurant\${category}Items\`);
+      if (!list) return;
       const row = document.createElement('div');
-      row.className = 'service-row';
-      row.innerHTML = '<input type="text" class="input" placeholder="Service name" name="serviceName[]"><input type="text" class="input" placeholder="Price" name="servicePrice[]"><button type="button" class="delete-row-btn" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:16px;height:16px"></i></button>';
+      row.className = 'service-row service-row-two';
+      row.innerHTML = \`
+        <input type="text" class="input" name="restaurantItemName[]" placeholder="Item Name" value="\${item.name || ''}">
+        <input type="text" class="input" name="restaurantItemPrice[]" placeholder="Price" value="\${item.price || ''}">
+        <button type="button" class="delete-row-btn" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      \`;
       list.appendChild(row);
       lucide.createIcons();
     }
-    function addFaqRow() {
-      const list = document.getElementById('faqsList');
+
+    function addPhoneProductRow(product = {}) {
+      const list = document.getElementById('phoneProductsList');
+      if (!list) return;
       const row = document.createElement('div');
       row.className = 'service-row';
-      row.innerHTML = '<input type="text" class="input" placeholder="Question" name="faqQuestion[]"><input type="text" class="input" placeholder="Answer" name="faqAnswer[]"><button type="button" class="delete-row-btn" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:16px;height:16px"></i></button>';
+      row.innerHTML = \`
+        <input type="text" class="input" name="phoneProductModel[]" placeholder="Phone Model" value="\${product.model || ''}">
+        <input type="text" class="input" name="phoneProductStorage[]" placeholder="Storage" value="\${product.storage || ''}">
+        <input type="text" class="input" name="phoneProductPrice[]" placeholder="Price" value="\${product.price || ''}">
+        <select class="select" name="phoneProductCondition[]"><option value="New" \${product.condition === 'New' ? 'selected' : ''}>New</option><option value="Used" \${product.condition === 'Used' ? 'selected' : ''}>Used</option></select>
+        <label style="display:flex;align-items:center;gap:8px;min-width:130px;"><input type="checkbox" name="phoneProductInStock[]" \${product.inStock ? 'checked' : ''}> In Stock</label>
+        <button type="button" class="delete-row-btn" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      \`;
       list.appendChild(row);
       lucide.createIcons();
     }
+
+    function addClinicDoctorRow(doctor = {}) {
+      const list = document.getElementById('clinicDoctorsList');
+      if (!list) return;
+      const row = document.createElement('div');
+      row.className = 'service-row';
+      row.innerHTML = \`
+        <input type="text" class="input" name="clinicDoctorName[]" placeholder="Doctor Name" value="\${doctor.name || ''}">
+        <input type="text" class="input" name="clinicDoctorSpecialization[]" placeholder="Specialization" value="\${doctor.specialization || ''}">
+        <input type="text" class="input" name="clinicDoctorFee[]" placeholder="Consultation Fee" value="\${doctor.fee || ''}">
+        <input type="text" class="input" name="clinicDoctorDays[]" placeholder="Available Days" value="\${doctor.days || ''}">
+        <button type="button" class="delete-row-btn" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      \`;
+      list.appendChild(row);
+      lucide.createIcons();
+    }
+
+    function addSalonServiceRow(service = {}) {
+      const list = document.getElementById('salonServicesList');
+      if (!list) return;
+      const row = document.createElement('div');
+      row.className = 'service-row';
+      row.innerHTML = \`
+        <input type="text" class="input" name="salonServiceName[]" placeholder="Service Name" value="\${service.name || ''}">
+        <input type="text" class="input" name="salonServiceDuration[]" placeholder="Duration" value="\${service.duration || ''}">
+        <input type="text" class="input" name="salonServicePrice[]" placeholder="Price" value="\${service.price || ''}">
+        <button type="button" class="delete-row-btn" onclick="this.parentElement.remove()"><i data-lucide="x" style="width:16px;height:16px"></i></button>
+      \`;
+      list.appendChild(row);
+      lucide.createIcons();
+    }
+
+    function populateCategoryFields(structuredData) {
+      window.loadedStructuredData = structuredData || {};
+      if (currentCategory === 'phone_shop') {
+        const products = Array.isArray(structuredData.products) ? structuredData.products : [];
+        const list = document.getElementById('phoneProductsList');
+        if (list) {
+          list.innerHTML = '';
+          if (!products.length) addPhoneProductRow();
+          products.forEach(p => addPhoneProductRow(p));
+        }
+        document.getElementById('phone_warrantyPolicy').value = structuredData.warrantyPolicy || '';
+        document.getElementById('phone_exchangePolicy').value = structuredData.exchangePolicy || '';
+        document.getElementById('phone_deliveryAreas').value = structuredData.deliveryAreas || '';
+      } else if (currentCategory === 'restaurant') {
+        restaurantMenuTab = restaurantTabs[0];
+        renderRestaurantTabContent();
+        document.getElementById('restaurant_minOrder').value = structuredData.minimumOrder || '';
+        document.getElementById('restaurant_deliveryAvailable').classList.toggle('active', structuredData.deliveryAvailable === true);
+        document.getElementById('restaurant_deliveryCharge').value = structuredData.deliveryCharge || '';
+        document.getElementById('restaurant_tableBooking').classList.toggle('active', structuredData.tableBookingAvailable === true);
+        restaurantTabs.forEach(tab => {
+          const items = Array.isArray((structuredData.menu || {})[tab]) ? structuredData.menu[tab] : [];
+          const list = document.getElementById(\`restaurant\${tab}Items\`);
+          if (!list) return;
+          list.innerHTML = '';
+          if (!items.length) addRestaurantMenuRow(tab);
+          items.forEach(item => addRestaurantMenuRow(tab, item));
+        });
+      } else if (currentCategory === 'clinic') {
+        const doctors = Array.isArray(structuredData.doctors) ? structuredData.doctors : [];
+        const list = document.getElementById('clinicDoctorsList');
+        if (list) {
+          list.innerHTML = '';
+          if (!doctors.length) addClinicDoctorRow();
+          doctors.forEach(d => addClinicDoctorRow(d));
+        }
+        document.getElementById('clinic_emergencyContact').value = structuredData.emergencyContact || '';
+        document.getElementById('clinic_insuranceAccepted').classList.toggle('active', structuredData.insuranceAccepted === true);
+        document.getElementById('clinic_advanceNotice').value = structuredData.advanceNotice || '';
+      } else if (currentCategory === 'salon') {
+        const services = Array.isArray(structuredData.services) ? structuredData.services : [];
+        const list = document.getElementById('salonServicesList');
+        if (list) {
+          list.innerHTML = '';
+          if (!services.length) addSalonServiceRow();
+          services.forEach(s => addSalonServiceRow(s));
+        }
+        document.getElementById('salon_stylists').value = structuredData.stylists || '';
+        document.getElementById('salon_walkInPolicy').value = structuredData.walkInPolicy || 'Walk-ins Welcome';
+        document.getElementById('salon_advanceBookingHours').value = structuredData.advanceBookingHours || '';
+      } else {
+        document.getElementById('general_productList').value = structuredData.productList || '';
+        document.getElementById('general_priceMin').value = structuredData.priceMin || '';
+        document.getElementById('general_priceMax').value = structuredData.priceMax || '';
+        document.getElementById('general_wholesaleAvailable').classList.toggle('active', structuredData.wholesaleAvailable === true);
+        document.getElementById('general_deliveryPolicy').value = structuredData.deliveryPolicy || '';
+      }
+    }
+
+    function getSectionButton(section) {
+      return document.querySelector(\`#\${section} .save-card-btn\`);
+    }
+
+    async function saveSection(section, button) {
+      if (!button) button = getSectionButton(section);
+      if (!button) return;
+      const label = button.querySelector('.label');
+      button.disabled = true;
+      button.classList.add('loading');
+      if (label) label.textContent = 'Saving';
+      let data = {};
+      if (section === 'identity') {
+        data.shop_name = document.getElementById('shop_name').value;
+        data.description = document.getElementById('description').value;
+        data.category = document.getElementById('category').value || 'general';
+      } else if (section === 'category') {
+        data.category = document.getElementById('category').value || 'general';
+        data.structured_data = collectCategoryStructuredData();
+      } else if (section === 'whatsapp') {
+        data.whatsapp_number = document.getElementById('whatsapp_number').value;
+        data.whatsapp_phone_id = document.getElementById('whatsapp_phone_id').value;
+      } else if (section === 'notifications') {
+        data.owner_whatsapp = document.getElementById('owner_whatsapp').value;
+      } else if (section === 'payment') {
+        data.payment_link = document.getElementById('payment_link').value;
+      }
+      try {
+        const res = await fetch('/api/business', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+        const result = await res.json();
+        if (result.success) {
+          button.classList.add('success');
+          showToast('Settings saved!', 'success');
+          if (label) label.textContent = 'Saved';
+          if (result.business && result.business.shop_name) document.getElementById('businessNameSidebar').textContent = result.business.shop_name;
+          setTimeout(() => {
+            button.classList.remove('success');
+            if (label) label.textContent = 'Save';
+          }, 2000);
+        } else {
+          showToast(result.error || 'Save failed', 'error');
+        }
+      } catch (err) {
+        showToast('Save failed', 'error');
+      } finally {
+        button.disabled = false;
+        button.classList.remove('loading');
+        if (label) label.textContent = 'Save';
+      }
+    }
+
+    function collectCategoryStructuredData() {
+      const structured = {};
+      if (currentCategory === 'phone_shop') {
+        const models = document.querySelectorAll('input[name="phoneProductModel[]"]');
+        const storages = document.querySelectorAll('input[name="phoneProductStorage[]"]');
+        const prices = document.querySelectorAll('input[name="phoneProductPrice[]"]');
+        const conditions = document.querySelectorAll('select[name="phoneProductCondition[]"]');
+        const stockBoxes = document.querySelectorAll('input[name="phoneProductInStock[]"]');
+        structured.products = Array.from(models).map((model, index) => ({
+          model: model.value.trim(),
+          storage: storages[index]?.value.trim() || '',
+          price: prices[index]?.value.trim() || '',
+          condition: conditions[index]?.value || 'New',
+          inStock: stockBoxes[index]?.checked === true
+        })).filter(p => p.model || p.storage || p.price);
+        structured.warrantyPolicy = document.getElementById('phone_warrantyPolicy').value;
+        structured.exchangePolicy = document.getElementById('phone_exchangePolicy').value;
+        structured.deliveryAreas = document.getElementById('phone_deliveryAreas').value;
+      } else if (currentCategory === 'restaurant') {
+        structured.menu = {};
+        restaurantTabs.forEach(tab => {
+          const names = document.querySelectorAll(\`#restaurant\${tab}Items input[name="restaurantItemName[]"]\`);
+          const prices = document.querySelectorAll(\`#restaurant\${tab}Items input[name="restaurantItemPrice[]"]\`);
+          structured.menu[tab] = Array.from(names).map((name, idx) => ({ name: name.value.trim(), price: prices[idx]?.value.trim() || '' })).filter(item => item.name || item.price);
+        });
+        structured.minimumOrder = document.getElementById('restaurant_minOrder').value;
+        structured.deliveryAvailable = document.getElementById('restaurant_deliveryAvailable').classList.contains('active');
+        structured.deliveryCharge = document.getElementById('restaurant_deliveryCharge').value;
+        structured.tableBookingAvailable = document.getElementById('restaurant_tableBooking').classList.contains('active');
+      } else if (currentCategory === 'clinic') {
+        const names = document.querySelectorAll('input[name="clinicDoctorName[]"]');
+        const specs = document.querySelectorAll('input[name="clinicDoctorSpecialization[]"]');
+        const fees = document.querySelectorAll('input[name="clinicDoctorFee[]"]');
+        const days = document.querySelectorAll('input[name="clinicDoctorDays[]"]');
+        structured.doctors = Array.from(names).map((name, idx) => ({
+          name: name.value.trim(),
+          specialization: specs[idx]?.value.trim() || '',
+          fee: fees[idx]?.value.trim() || '',
+          days: days[idx]?.value.trim() || ''
+        })).filter(doc => doc.name || doc.specialization || doc.fee || doc.days);
+        structured.emergencyContact = document.getElementById('clinic_emergencyContact').value;
+        structured.insuranceAccepted = document.getElementById('clinic_insuranceAccepted').classList.contains('active');
+        structured.advanceNotice = document.getElementById('clinic_advanceNotice').value;
+      } else if (currentCategory === 'salon') {
+        const names = document.querySelectorAll('input[name="salonServiceName[]"]');
+        const durations = document.querySelectorAll('input[name="salonServiceDuration[]"]');
+        const prices = document.querySelectorAll('input[name="salonServicePrice[]"]');
+        structured.services = Array.from(names).map((name, idx) => ({
+          name: name.value.trim(),
+          duration: durations[idx]?.value.trim() || '',
+          price: prices[idx]?.value.trim() || ''
+        })).filter(service => service.name || service.duration || service.price);
+        structured.stylists = document.getElementById('salon_stylists').value;
+        structured.walkInPolicy = document.getElementById('salon_walkInPolicy').value;
+        structured.advanceBookingHours = document.getElementById('salon_advanceBookingHours').value;
+      } else {
+        structured.productList = document.getElementById('general_productList').value;
+        structured.priceMin = document.getElementById('general_priceMin').value;
+        structured.priceMax = document.getElementById('general_priceMax').value;
+        structured.wholesaleAvailable = document.getElementById('general_wholesaleAvailable').classList.contains('active');
+        structured.deliveryPolicy = document.getElementById('general_deliveryPolicy').value;
+      }
+      return structured;
+    }
+
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
       toast.textContent = message;
       toast.className = 'toast show ' + type;
       setTimeout(() => { toast.className = 'toast'; }, 3000);
     }
-    async function saveSection(section) {
-      let data = {};
-      if (section === 'identity') { data.shop_name = document.getElementById('shop_name').value; data.description = document.getElementById('description').value; data.category = document.getElementById('category').value; }
-      else if (section === 'services') { const names = document.querySelectorAll('input[name="serviceName[]"]'); const prices = document.querySelectorAll('input[name="servicePrice[]"]'); data.services = Array.from(names).map((n, i) => n.value + ': ' + prices[i].value).filter(s => s.trim()).join('\\n'); }
-      else if (section === 'hours') { data.timings = 'Mon-Sat 9am-6pm'; }
-      else if (section === 'faqs') { const questions = document.querySelectorAll('input[name="faqQuestion[]"]'); const answers = document.querySelectorAll('input[name="faqAnswer[]"]'); data.faqs = Array.from(questions).map((q, i) => 'Q: ' + q.value + ' A: ' + answers[i].value).filter(f => f.trim().length > 5).join('\\n'); }
-      else if (section === 'whatsapp') { data.whatsapp_number = document.getElementById('whatsapp_number').value; data.whatsapp_phone_id = document.getElementById('whatsapp_phone_id').value; }
-      else if (section === 'notifications') { data.owner_whatsapp = document.getElementById('owner_whatsapp').value; }
-      else if (section === 'payment') { data.payment_link = document.getElementById('payment_link').value; }
-      try {
-        const res = await fetch('/api/business', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-        const result = await res.json();
-        if (result.success) { showToast('Saved successfully', 'success'); if (result.business && result.business.shop_name) document.getElementById('businessNameSidebar').textContent = result.business.shop_name; }
-        else showToast(result.error || 'Save failed', 'error');
-      } catch (err) { showToast('Save failed', 'error'); }
-    }
+
     async function loadSettings() {
       try {
         const res = await fetch('/api/auth/me');
@@ -2321,7 +2591,7 @@ function getSettingsPage() {
         document.getElementById('userAvatar').textContent = (data.shop_name || 'B').charAt(0).toUpperCase();
         document.getElementById('shop_name').value = data.shop_name || '';
         document.getElementById('description').value = data.description || '';
-        document.getElementById('category').value = data.category || '';
+        document.getElementById('category').value = data.category || 'general';
         document.getElementById('whatsapp_number').value = data.whatsapp_number || '';
         document.getElementById('whatsapp_phone_id').value = data.whatsapp_phone_id || '';
         document.getElementById('owner_whatsapp').value = data.owner_whatsapp || '';
@@ -2329,15 +2599,22 @@ function getSettingsPage() {
         const statusDot = document.getElementById('whatsappStatusDot');
         const statusText = document.getElementById('whatsappStatusText');
         if (data.whatsapp_phone_id && data.whatsapp_number) { statusDot.className = 'status-dot connected'; statusText.textContent = 'Connected'; }
-        initHoursGrid();
+        window.loadedStructuredData = data.structured_data || {};
+        renderCategorySection();
       } catch (err) { console.error(err); }
     }
+
+    function handleCategoryChange() {
+      renderCategorySection();
+    }
+
     async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location = '/login'; }
     loadSettings();
   </script>
 </body>
 </html>`;
 }
+
 
 function getOrdersPage() {
   return `<!DOCTYPE html>
