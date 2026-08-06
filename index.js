@@ -1469,75 +1469,87 @@ function getLoginPage() {
             <input type="password" id="password" placeholder="Your password">
             <div class="field-error" id="passwordError">Please enter your password.</div>
           </div>
-          <button type="submit" class="btn"><span class="spinner"></span><span>Sign In</span></button>
+          <button type="submit" class="btn" id="loginBtn"><span class="spinner"></span><span>Sign In</span></button>
         </form>
         <p class="auth-footer">New here? <a href="/register">Create account</a></p>
       </div>
     </div>
   </div>
   <script>
-    lucide.createIcons();
-    function showFieldError(id, message) {
-      const field = document.getElementById(id);
-      const error = document.getElementById(id + 'Error');
-        if (field) field.style.borderColor = '#EF5350';
-      if (error) { error.textContent = message; error.style.display = 'block'; }
+function isValidEmail(email) {
+  return email && email.includes('@') &&
+         email.includes('.') && email.length > 5;
+}
+
+function showError(msg) {
+  let el = document.getElementById('errorMsg');
+  if (!el) {
+    el = document.createElement('p');
+    el.id = 'errorMsg';
+    el.style.cssText = 'color:#ef4444;font-size:13px;margin-top:10px;text-align:center';
+    document.getElementById('loginForm').appendChild(el);
+  }
+  el.textContent = msg;
+}
+
+function clearError() {
+  const el = document.getElementById('errorMsg');
+  if (el) el.textContent = '';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('loginForm');
+  const btn = document.getElementById('loginBtn');
+  const emailInput = document.getElementById('email');
+  const passwordInput = document.getElementById('password');
+
+  emailInput.addEventListener('input', clearError);
+  passwordInput.addEventListener('input', clearError);
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    clearError();
+
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!email || !isValidEmail(email)) {
+      showError('Please enter a valid email address');
+      return;
     }
-    function clearFieldErrors() {
-      ['email', 'password'].forEach((id) => {
-        const field = document.getElementById(id);
-        const error = document.getElementById(id + 'Error');
-          if (field) field.style.borderColor = 'rgba(255,255,255,0.08)';
-        if (error) error.style.display = 'none';
+
+    if (!password || password.length < 6) {
+      showError('Please enter your password');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
       });
-      const globalError = document.getElementById('error');
-      if (globalError) globalError.style.display = 'none';
-    }
-    function isValidEmail(email) {
-      return email &&
-             email.includes('@') &&
-             email.includes('.') &&
-             email.length > 5;
-    }
-    const loginForm = document.getElementById('loginForm');
-    if (loginForm) {
-      loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        clearFieldErrors();
-        const btn = e.target.querySelector('.btn') || document.querySelector('.btn');
-        const email = document.getElementById('email').value.trim();
-        const password = document.getElementById('password').value;
-        let hasError = false;
-        const emailValid = isValidEmail(email);
-        if (!email || !emailValid) { showFieldError('email', 'Please enter a valid email.'); hasError = true; }
-        if (!password) { showFieldError('password', 'Please enter your password.'); hasError = true; }
-      if (hasError) {
-        document.getElementById('loginCard').classList.remove('shake');
-        void document.getElementById('loginCard').offsetWidth;
-        document.getElementById('loginCard').classList.add('shake');
-        return;
+
+      const data = await res.json();
+
+      if (data.success) {
+        window.location.href = '/dashboard';
+      } else {
+        showError(data.error || 'Invalid email or password');
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
       }
-      btn.classList.add('loading');
-      try {
-        const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
-        const data = await res.json();
-        if (data.success) window.location = '/dashboard';
-        else {
-          document.getElementById('error').textContent = data.error || 'Invalid credentials.';
-          document.getElementById('error').style.display = 'block';
-          document.getElementById('loginCard').classList.remove('shake');
-          void document.getElementById('loginCard').offsetWidth;
-          document.getElementById('loginCard').classList.add('shake');
-        }
-      } catch (err) {
-        document.getElementById('error').textContent = 'Login failed.';
-        document.getElementById('error').style.display = 'block';
-        document.getElementById('loginCard').classList.remove('shake');
-        void document.getElementById('loginCard').offsetWidth;
-        document.getElementById('loginCard').classList.add('shake');
-      } finally { btn.classList.remove('loading'); }
-    });
-  </script>
+    } catch(err) {
+      showError('Connection error. Please try again.');
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  });
+});
+</script>
 </body>
 </html>`;
 }
