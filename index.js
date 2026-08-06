@@ -1125,7 +1125,21 @@ app.get('/api/analytics/stats', requireAuth, async (req, res) => {
 
     const [messagesLast7d, topWordsResult, busiestHourResult, thisWeekResult, lastWeekResult, hotLeadsResult] = await Promise.all([
       pool.query("SELECT DATE(m.timestamp) as date, COUNT(*)::int as count FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = $1 AND m.timestamp >= NOW() - INTERVAL '7 days' GROUP BY DATE(m.timestamp) ORDER BY date", [businessId]),
-      pool.query("SELECT LOWER(unnest(string_to_array(m.content, ' '))) as word, COUNT(*)::int as count FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = $1 AND m.direction = 'in' AND m.timestamp >= NOW() - INTERVAL '7 days' AND LENGTH(unnest(string_to_array(m.content, ' '))) > 2 GROUP BY LOWER(unnest(string_to_array(m.content, ' '))) HAVING LOWER(unnest(string_to_array(m.content, ' '))) NOT IN ('the','and','for','you','are','not','that','this','what','how','can','was','with','have','your','will','from','just','its','ive','i\'m','don\'t') ORDER BY count DESC LIMIT 5", [businessId]),
+      pool.query(`SELECT word, COUNT(*)::int as count
+        FROM (
+          SELECT LOWER(word) AS word
+          FROM messages m
+          JOIN conversations c ON c.id = m.conversation_id
+          CROSS JOIN LATERAL unnest(string_to_array(COALESCE(m.content, ''), ' ')) AS word
+          WHERE c.business_id = $1
+            AND m.direction = 'in'
+            AND m.timestamp >= NOW() - INTERVAL '7 days'
+            AND LENGTH(word) > 2
+        ) words
+        WHERE word NOT IN ('the','and','for','you','are','not','that','this','what','how','can','was','with','have','your','will','from','just','its','ive','i''m','don''t')
+        GROUP BY word
+        ORDER BY count DESC
+        LIMIT 5`, [businessId]),
       pool.query("SELECT EXTRACT(HOUR FROM m.timestamp)::int as hour, COUNT(*)::int as count FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE c.business_id = $1 AND m.timestamp >= NOW() - INTERVAL '7 days' GROUP BY hour ORDER BY count DESC LIMIT 1", [businessId]),
       pool.query("SELECT COUNT(DISTINCT c.id)::int as count FROM conversations c JOIN messages m ON m.conversation_id = c.id WHERE c.business_id = $1 AND m.timestamp >= NOW() - INTERVAL '7 days'", [businessId]),
       pool.query("SELECT COUNT(DISTINCT c.id)::int as count FROM conversations c JOIN messages m ON m.conversation_id = c.id WHERE c.business_id = $1 AND m.timestamp >= NOW() - INTERVAL '14 days' AND m.timestamp < NOW() - INTERVAL '7 days'", [businessId]),
@@ -1476,18 +1490,27 @@ function getLoginPage() {
           if (field) field.style.borderColor = 'rgba(255,255,255,0.08)';
         if (error) error.style.display = 'none';
       });
-      document.getElementById('error').style.display = 'none';
+      const globalError = document.getElementById('error');
+      if (globalError) globalError.style.display = 'none';
     }
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      clearFieldErrors();
-      const btn = e.target.querySelector('.btn');
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      let hasError = false;
-      const emailValid = isValidEmail(email);
-      if (!email || !emailValid) { showFieldError('email', 'Please enter a valid email.'); hasError = true; }
-      if (!password) { showFieldError('password', 'Please enter your password.'); hasError = true; }
+    function isValidEmail(email) {
+      return email &&
+             email.includes('@') &&
+             email.includes('.') &&
+             email.length > 5;
+    }
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+      loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        clearFieldErrors();
+        const btn = e.target.querySelector('.btn') || document.querySelector('.btn');
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        let hasError = false;
+        const emailValid = isValidEmail(email);
+        if (!email || !emailValid) { showFieldError('email', 'Please enter a valid email.'); hasError = true; }
+        if (!password) { showFieldError('password', 'Please enter your password.'); hasError = true; }
       if (hasError) {
         document.getElementById('loginCard').classList.remove('shake');
         void document.getElementById('loginCard').offsetWidth;
@@ -1633,7 +1656,8 @@ function getRegisterPage() {
     }
 
     function isValidEmail(email) {
-      return email.includes('@') &&
+      return email &&
+             email.includes('@') &&
              email.includes('.') &&
              email.length > 5;
     }
